@@ -1,0 +1,8 @@
+names:
+- person
+- car
+nc: 2
+path: E:\script\YOLO\11111
+test: images
+train: images
+val: images

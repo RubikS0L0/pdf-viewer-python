@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+PDFViewer.spec
+
+dist/
+build/
+
+# Test
+.pytest_cache/
+
+# Environment
+.env
+
+# Windows
+Thumbs.db
+
+# Mac
+.DS_Store
+
+# Backup
+backup/
+
+# Model files (large binary files)
+models/best.onnx
+
+# Trae IDE files
+.trae/
+
+# Test PDFs
+PDF for test/

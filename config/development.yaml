@@ -1,0 +1,60 @@
+# PDF浏览器开发环境配置
+
+# 模型配置
+model:
+  path: "models/best.onnx"  # YOLOv8模型文件路径
+  input_size: 640  # 模型输入大小
+  device: "cpu"  # 计算设备：cpu或cuda
+
+# 检测配置
+detection:
+  conf_threshold: 0.5  # 置信度阈值
+  iou_threshold: 0.45  # IOU阈值
+  nms_threshold: 0.5  # NMS阈值
+  verbose: false  # 详细日志标志
+
+# 内存管理配置
+memory:
+  warning_threshold: 80.0  # 内存警告阈值（%）
+  critical_threshold: 85.0  # 内存临界阈值（%）
+  cache_cleanup_ratio: 0.5  # 缓存清理比例
+  critical_cleanup_ratio: 0.7  # 临界状态缓存清理比例
+
+# 缓存配置
+cache:
+  page_cache_size: 10  # 页面缓存大小
+  thumbnail_cache_size: 20  # 缩略图缓存数量
+  cache_timeout: 500  # 缓存超时时间（毫秒）
+
+# 界面配置
+ui:
+  throttle_delay: 16  # 节流延迟时间（毫秒）
+  min_select_area: 20  # 最小选择区域像素
+  font_size: 8  # 检测结果字体大小
+
+# 缩放配置
+zoom:
+  min_zoom: 0.2  # 最小缩放比例
+  max_zoom: 5.0  # 最大缩放比例
+  zoom_delta: 1.05  # 滚轮缩放因子
+  default_zoom: 1.0  # 默认缩放级别
+
+# 间距配置
+spacing:
+  page_spacing: 20  # 双页模式页面间距
+  spread_spacing: 10  # 双页连续模式双页组合间距
+
+# 预加载配置
+preload:
+  range: 3  # 预加载页面范围
+
+# 标签映射配置
+labels:
+  0: "valve"
+  1: "pump"
+  2: "heat_exchanger"
+  3: "reactor"
+  4: "tank"
+  5: "pipe"
+  6: "instrument"
+  7: "other"
