@@ -1,3 +1,144 @@
-2026-04-14 10:34:59,525 - ERROR - [2026-04-14T10:34:59.524557] TypeError in single_page_viewtype.show_page:54 - ViewtypeService.get_page_pixmap_async() missing 1 required positional argument: 'callback' | Context: action=activate_viewtype
-2026-04-14 10:39:43,103 - ERROR - [2026-04-14T10:39:43.103023] TypeError in single_page_viewtype.show_page:54 - ViewtypeService.get_page_pixmap_async() missing 1 required positional argument: 'callback' | Context: action=activate_viewtype
-2026-04-14 10:54:28,061 - ERROR - [2026-04-14T10:54:28.061326] TypeError in single_page_viewtype.show_page:54 - ViewtypeService.get_page_pixmap_async() missing 1 required positional argument: 'callback' | Context: action=activate_viewtype
+2026-05-08 10:39:37,784 - INFO - 渲染线程池初始化完成，最大工作线程数：2
+2026-05-08 10:39:37,785 - INFO - 预加载线程池初始化完成，最大工作线程数：2
+2026-05-08 10:39:37,785 - INFO - 图形检测线程池初始化完成，最大工作线程数：3
+2026-05-08 10:39:37,785 - INFO - 缩略图生成线程池初始化完成，最大工作线程数：2
+2026-05-08 10:39:37,787 - DEBUG - 视口尺寸更新: (0.0, 0.0) -> (636, 476)
+2026-05-08 10:39:38,304 - DEBUG - 视口尺寸更新: (636, 476) -> (994, 678)
+2026-05-08 10:39:43,988 - DEBUG - 缩略图生成完成：页面0，质量级别2
+2026-05-08 10:39:44,002 - DEBUG - 缩略图生成完成：页面1，质量级别2
+2026-05-08 10:39:44,057 - DEBUG - 缩略图生成完成：页面2，质量级别2
+2026-05-08 10:39:44,084 - DEBUG - 缩略图生成完成：页面3，质量级别2
+2026-05-08 10:39:44,152 - DEBUG - 缩略图生成完成：页面4，质量级别2
+2026-05-08 10:39:44,162 - DEBUG - 缩略图生成完成：页面5，质量级别2
+2026-05-08 10:39:44,339 - DEBUG - 缩略图生成完成：页面6，质量级别2
+2026-05-08 10:39:44,441 - DEBUG - 缩略图生成完成：页面7，质量级别2
+2026-05-08 10:39:44,667 - DEBUG - 缩略图生成完成：页面8，质量级别2
+2026-05-08 10:39:44,697 - DEBUG - 缩略图生成完成：页面9，质量级别2
+2026-05-08 10:39:44,839 - DEBUG - 缩略图生成完成：页面10，质量级别2
+2026-05-08 10:39:44,956 - DEBUG - 缩略图生成完成：页面11，质量级别2
+2026-05-08 10:39:45,042 - DEBUG - 缩略图生成完成：页面12，质量级别2
+2026-05-08 10:39:45,046 - DEBUG - 缩略图生成完成：页面13，质量级别2
+2026-05-08 10:39:45,051 - DEBUG - 缩略图生成完成：页面14，质量级别2
+2026-05-08 10:39:45,091 - DEBUG - 缩略图生成完成：页面15，质量级别2
+2026-05-08 10:39:46,456 - DEBUG - 视口尺寸更新: (994, 678) -> (982, 678)
+2026-05-08 10:39:46,559 - DEBUG - 页面已居中: h=0, v=222
+2026-05-08 10:39:47,911 - DEBUG - SinglePageContinuousViewtype：pages_layout创建成功，类型为<class 'PyQt6.QtWidgets.QVBoxLayout'>
+2026-05-08 10:39:47,912 - DEBUG - SinglePageContinuousViewtype：pages_layout属性设置完成
+2026-05-08 10:39:47,912 - DEBUG - SinglePageContinuousViewtype：检查pages_layout是否为None，值为：<PyQt6.QtWidgets.QVBoxLayout object at 0x000002B1E58A2850>
+2026-05-08 10:39:47,912 - DEBUG - SinglePageContinuousViewtype：pages_layout检查通过，继续执行
+2026-05-08 10:39:47,912 - DEBUG - SinglePageContinuousViewtype：检查center_layout是否为None，值为：<PyQt6.QtWidgets.QVBoxLayout object at 0x000002B1E595A2B0>
+2026-05-08 10:39:47,912 - DEBUG - SinglePageContinuousViewtype：center_layout检查通过，继续执行
+2026-05-08 10:39:47,913 - DEBUG - SinglePageContinuousViewtype：pages_layout添加到center_layout成功
+2026-05-08 10:39:47,913 - DEBUG - SinglePageContinuousViewtype：布局添加成功，继续执行
+2026-05-08 10:39:47,913 - DEBUG - SinglePageContinuousViewtype：is_active设置为True
+2026-05-08 10:39:47,913 - DEBUG - SinglePageContinuousViewtype：已安装 viewport Ctrl+滚轮过滤器
+2026-05-08 10:39:47,914 - DEBUG - [show_page] page_num=0, current_page_before=0
+2026-05-08 10:39:47,924 - WARNING - [_show_single_unit] unit_num=0, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:47,924 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:47,924 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：0，标签ID：2963090067920
+2026-05-08 10:39:47,925 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：0，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:39:47,929 - WARNING - [_show_single_unit] unit_num=1, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:47,929 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:47,929 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：1，标签ID：2963090068400
+2026-05-08 10:39:47,929 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：1，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:39:47,933 - WARNING - [_show_single_unit] unit_num=2, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:47,933 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:47,933 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：2，标签ID：2963090067280
+2026-05-08 10:39:47,933 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：2，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:39:47,933 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[0, 1, 2], widget order by page_labels=[(0, 2963090067920), (1, 2963090068400), (2, 2963090067280)]
+2026-05-08 10:39:47,934 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=3, order by unit=[0, 1, 2]
+2026-05-08 10:39:47,937 - DEBUG - SinglePageContinuousViewtype：激活成功，已显示当前页面
+2026-05-08 10:39:47,937 - DEBUG - [show_page] page_num=0, current_page_before=0
+2026-05-08 10:39:47,943 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[0, 1, 2], widget order by page_labels=[(0, 2963090067920), (1, 2963090068400), (2, 2963090067280)]
+2026-05-08 10:39:47,943 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=3, order by unit=[0, 1, 2]
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] unit=0, layout_count=3
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] found target at i=0, widget=2963090067920, accumulated before adding target=0
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=0, target_widget=found
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] unit=0, layout_count=3
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] found target at i=0, widget=2963090067920, accumulated before adding target=0
+2026-05-08 10:39:47,954 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=0, target_widget=found
+2026-05-08 10:39:53,754 - DEBUG - [show_page] page_num=1, current_page_before=0
+2026-05-08 10:39:53,765 - WARNING - [_show_single_unit] unit_num=3, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:53,766 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:53,766 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：3，标签ID：2963090069520
+2026-05-08 10:39:53,766 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：3，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:39:53,766 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[0, 1, 2, 3], widget order by page_labels=[(0, 2963090067920), (1, 2963090068400), (2, 2963090067280), (3, 2963090069520)]
+2026-05-08 10:39:53,766 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=4, order by unit=[0, 1, 2, 3]
+2026-05-08 10:39:53,776 - WARNING - [_scroll_to_unit_deferred] unit=1, layout_count=4
+2026-05-08 10:39:53,781 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:39:53,786 - WARNING - [_scroll_to_unit_deferred] found target at i=1, widget=2963090068400, accumulated before adding target=640
+2026-05-08 10:39:53,786 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=640, target_widget=found
+2026-05-08 10:39:56,025 - DEBUG - [show_page] page_num=2, current_page_before=1
+2026-05-08 10:39:56,036 - WARNING - [_show_single_unit] unit_num=4, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:56,037 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:56,037 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：4，标签ID：2963090069680
+2026-05-08 10:39:56,037 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：4，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:39:56,038 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[0, 1, 2, 3, 4], widget order by page_labels=[(0, 2963090067920), (1, 2963090068400), (2, 2963090067280), (3, 2963090069520), (4, 2963090069680)]
+2026-05-08 10:39:56,038 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=5, order by unit=[0, 1, 2, 3, 4]
+2026-05-08 10:39:56,048 - WARNING - [_scroll_to_unit_deferred] unit=2, layout_count=5
+2026-05-08 10:39:56,053 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:39:56,059 - WARNING - [_scroll_to_unit_deferred] i=1, h=620, min=620, hint=620, used=620
+2026-05-08 10:39:56,059 - WARNING - [_scroll_to_unit_deferred] found target at i=2, widget=2963090067280, accumulated before adding target=1280
+2026-05-08 10:39:56,059 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=1280, target_widget=found
+2026-05-08 10:39:57,951 - DEBUG - [show_page] page_num=3, current_page_before=2
+2026-05-08 10:39:57,963 - WARNING - [_show_single_unit] unit_num=5, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:39:57,963 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:39:57,963 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：5，标签ID：2963090067920
+2026-05-08 10:39:57,964 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[1, 2, 3, 4, 5], widget order by page_labels=[(1, 2963090068400), (2, 2963090067280), (3, 2963090069520), (4, 2963090069680), (5, 2963090067920)]
+2026-05-08 10:39:57,964 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=5, order by unit=[1, 2, 3, 4, 5]
+2026-05-08 10:39:57,997 - WARNING - [_scroll_to_unit_deferred] unit=3, layout_count=5
+2026-05-08 10:39:58,124 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:39:58,150 - WARNING - [_scroll_to_unit_deferred] i=1, h=620, min=620, hint=620, used=620
+2026-05-08 10:39:58,150 - WARNING - [_scroll_to_unit_deferred] found target at i=2, widget=2963090069520, accumulated before adding target=1280
+2026-05-08 10:39:58,150 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=1280, target_widget=found
+2026-05-08 10:39:58,166 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：5，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:40:00,031 - DEBUG - [show_page] page_num=4, current_page_before=3
+2026-05-08 10:40:00,044 - WARNING - [_show_single_unit] unit_num=6, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:40:00,045 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:40:00,045 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：6，标签ID：2963090068400
+2026-05-08 10:40:00,045 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[2, 3, 4, 5, 6], widget order by page_labels=[(2, 2963090067280), (3, 2963090069520), (4, 2963090069680), (5, 2963090067920), (6, 2963090068400)]
+2026-05-08 10:40:00,046 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=5, order by unit=[2, 3, 4, 5, 6]
+2026-05-08 10:40:00,078 - WARNING - [_scroll_to_unit_deferred] unit=4, layout_count=5
+2026-05-08 10:40:00,079 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:00,087 - WARNING - [_scroll_to_unit_deferred] i=1, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:00,087 - WARNING - [_scroll_to_unit_deferred] found target at i=2, widget=2963090069680, accumulated before adding target=1280
+2026-05-08 10:40:00,087 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=1280, target_widget=found
+2026-05-08 10:40:00,184 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：6，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:40:02,293 - DEBUG - [show_page] page_num=5, current_page_before=4
+2026-05-08 10:40:02,322 - WARNING - [_show_single_unit] unit_num=7, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:40:02,322 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:40:02,322 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：7，标签ID：2963090067280
+2026-05-08 10:40:02,323 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[3, 4, 5, 6, 7], widget order by page_labels=[(3, 2963090069520), (4, 2963090069680), (5, 2963090067920), (6, 2963090068400), (7, 2963090067280)]
+2026-05-08 10:40:02,323 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=5, order by unit=[3, 4, 5, 6, 7]
+2026-05-08 10:40:02,356 - WARNING - [_scroll_to_unit_deferred] unit=5, layout_count=5
+2026-05-08 10:40:02,357 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:02,366 - WARNING - [_scroll_to_unit_deferred] i=1, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:02,366 - WARNING - [_scroll_to_unit_deferred] found target at i=2, widget=2963090067920, accumulated before adding target=1280
+2026-05-08 10:40:02,372 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=1280, target_widget=found
+2026-05-08 10:40:02,373 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：7，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:40:04,733 - DEBUG - [show_page] page_num=6, current_page_before=5
+2026-05-08 10:40:04,757 - WARNING - [_show_single_unit] unit_num=8, predicted_size=(438, 619), zoom=0.56
+2026-05-08 10:40:04,757 - WARNING - [_show_single_unit] setMinimumSize(438, 619)
+2026-05-08 10:40:04,758 - DEBUG - 单页连续视图类型: 创建并添加了页面标签，页码：8，标签ID：2963090069520
+2026-05-08 10:40:04,758 - WARNING - [_reorder_layout_widgets] before reorder: page_labels=[4, 5, 6, 7, 8], widget order by page_labels=[(4, 2963090069680), (5, 2963090067920), (6, 2963090068400), (7, 2963090067280), (8, 2963090069520)]
+2026-05-08 10:40:04,759 - WARNING - [_reorder_layout_widgets] after reorder: layout_count=5, order by unit=[4, 5, 6, 7, 8]
+2026-05-08 10:40:04,799 - WARNING - [_scroll_to_unit_deferred] unit=6, layout_count=5
+2026-05-08 10:40:04,799 - WARNING - [_scroll_to_unit_deferred] i=0, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:04,805 - WARNING - [_scroll_to_unit_deferred] i=1, h=620, min=620, hint=620, used=620
+2026-05-08 10:40:04,805 - WARNING - [_scroll_to_unit_deferred] found target at i=2, widget=2963090068400, accumulated before adding target=1280
+2026-05-08 10:40:04,806 - WARNING - [_scroll_to_unit_deferred] FINAL target_y=1280, target_widget=found
+2026-05-08 10:40:04,814 - DEBUG - 单页连续视图类型: 设置页面标签的pixmap，页码：8，pixmap大小：PyQt6.QtCore.QSize(439, 620)
+2026-05-08 10:40:07,189 - INFO - 开始关闭线程池...
+2026-05-08 10:40:07,189 - INFO - 关闭渲染线程池，等待任务完成：True
+2026-05-08 10:40:08,190 - INFO - 渲染线程池已关闭
+2026-05-08 10:40:08,190 - INFO - 关闭预加载线程池，等待任务完成：True
+2026-05-08 10:40:09,191 - INFO - 预加载线程池已关闭
+2026-05-08 10:40:09,191 - INFO - 关闭图形检测线程池，等待任务完成：True
+2026-05-08 10:40:10,192 - INFO - 图形检测线程池已关闭
+2026-05-08 10:40:10,192 - INFO - 关闭缩略图生成线程池，等待任务完成：True
+2026-05-08 10:40:11,193 - INFO - 缩略图生成线程池已关闭
+2026-05-08 10:40:11,193 - INFO - 所有线程池已成功关闭
+2026-05-08 10:40:11,223 - DEBUG - 开始清理视口管理器资源
+2026-05-08 10:40:11,224 - DEBUG - 成功清空观察者列表
+2026-05-08 10:40:11,224 - DEBUG - 视口管理器资源已清理
+2026-05-08 10:40:11,267 - INFO - 所有线程池和PDF处理器已关闭

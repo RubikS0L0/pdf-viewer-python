@@ -12,7 +12,7 @@
 
 import logging
 from PyQt6.QtWidgets import QScrollArea, QWidget, QGridLayout, QLabel
-from PyQt6.QtGui import QPixmap, QImage, QPainter
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QLinearGradient
 from PyQt6.QtCore import Qt, pyqtSignal, QMutex, QThread
 
 from utils.constants import Constants
@@ -440,12 +440,14 @@ class ThumbnailItem(QWidget):
     - 支持点击事件
     - 悬停效果
     """
-    clicked = pyqtSignal(int)  # 点击信号，传递页码
+    clicked = pyqtSignal(int, int)  # 点击信号：(页码, 修饰键 0=无 1=Ctrl 2=Shift)
     
     def __init__(self, page_num, pixmap, parent=None):
         super().__init__(parent)
         self.page_num = page_num
-        self.is_selected = False
+        self.is_selected = False  # 当前浏览页（左侧竖条 + 实框 + 渐变背景）
+        self.is_range_selected = False  # 区间选中（左侧竖条 + 虚框）
+        self._hovering = False  # 鼠标悬停状态
         self._pixmap = pixmap
         
         self._setup_ui()
@@ -485,28 +487,21 @@ class ThumbnailItem(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
     
     def _apply_styles(self):
-        """应用样式"""
+        """应用默认样式（未选中 / 无区间选中）"""
         from ui.styles import get_colors
         colors = get_colors()
         
-        # 基础样式
+        # 背景透明，由 paintEvent 绘制
         self.setStyleSheet(f"""
             QWidget {{
-                background-color: {colors.bg_card};
-                border: 2px solid transparent;
-                border-radius: 8px;
-            }}
-            QWidget:hover {{
-                background-color: {colors.bg_hover};
-                border-color: {colors.border};
+                background-color: transparent;
+                border: none;
             }}
             QLabel {{
                 background-color: transparent;
                 border: none;
             }}
         """)
-        
-        # 页码标签样式
         self.page_label.setStyleSheet(f"""
             color: {colors.text_secondary};
             font-size: 11px;
@@ -514,55 +509,45 @@ class ThumbnailItem(QWidget):
             background-color: transparent;
             border: none;
         """)
+        self.update()
     
     def enterEvent(self, event):
         """鼠标进入事件"""
-        if not self.is_selected:
-            self._set_hover_style(True)
+        self._hovering = True
+        self.update()
         super().enterEvent(event)
     
     def leaveEvent(self, event):
         """鼠标离开事件"""
-        if not self.is_selected:
-            self._set_hover_style(False)
+        self._hovering = False
+        self.update()
         super().leaveEvent(event)
     
-    def _set_hover_style(self, hover: bool):
-        """设置悬停样式"""
-        from ui.styles import get_colors
-        colors = get_colors()
-        
-        if hover:
-            self.setStyleSheet(f"""
-                QWidget {{
-                    background-color: {colors.bg_hover};
-                    border: 2px solid {colors.border};
-                    border-radius: 8px;
-                }}
-                QLabel {{
-                    background-color: transparent;
-                    border: none;
-                }}
-            """)
-    
+
     def mousePressEvent(self, event):
-        """处理鼠标点击事件"""
+        """处理鼠标点击事件，传递修饰键信息"""
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.page_num)
+            modifiers = event.modifiers()
+            mod_flag = 0
+            if modifiers & Qt.KeyboardModifier.ControlModifier:
+                mod_flag = 1  # Ctrl
+            elif modifiers & Qt.KeyboardModifier.ShiftModifier:
+                mod_flag = 2  # Shift
+            self.clicked.emit(self.page_num, mod_flag)
         super().mousePressEvent(event)
     
     def set_selected(self, selected):
-        """设置选中状态"""
+        """设置当前浏览页选中状态（左侧竖条 + 实线边框 + 渐变背景）"""
         from ui.styles import get_colors
         colors = get_colors()
         
         self.is_selected = selected
         if selected:
+            # 背景透明，由 paintEvent 绘制
             self.setStyleSheet(f"""
                 QWidget {{
-                    background-color: {colors.bg_selected};
-                    border: 2px solid {colors.primary};
-                    border-radius: 8px;
+                    background-color: transparent;
+                    border: none;
                 }}
                 QLabel {{
                     background-color: transparent;
@@ -571,13 +556,125 @@ class ThumbnailItem(QWidget):
             """)
             self.page_label.setStyleSheet(f"""
                 color: {colors.primary};
-                font-size: 11px;
-                font-weight: 600;
+                font-size: 12px;
+                font-weight: 700;
                 background-color: transparent;
                 border: none;
             """)
         else:
+            if self.is_range_selected:
+                self._apply_range_selected_style()
+            else:
+                self._apply_styles()
+        self.update()
+    
+    def set_range_selected(self, selected):
+        """设置区间选中状态（蓝色虚框/半透明背景）"""
+        if self.is_selected:
+            return  # 当前浏览页保持实框，不降级
+        self.is_range_selected = selected
+        if selected:
+            self._apply_range_selected_style()
+        else:
             self._apply_styles()
+    
+    def _apply_range_selected_style(self):
+        """应用区间选中样式（左侧竖条 + 虚线边框 + 半透明背景）"""
+        from ui.styles import get_colors
+        colors = get_colors()
+        
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: transparent;
+                border: none;
+            }}
+            QLabel {{
+                background-color: transparent;
+                border: none;
+            }}
+        """)
+        self.page_label.setStyleSheet(f"""
+            color: {colors.primary};
+            font-size: 11px;
+            font-weight: 600;
+            background-color: transparent;
+            border: none;
+        """)
+        self.update()
+
+    def paintEvent(self, event):
+        """自绘选中框 — 左侧竖条 + 边框 + 背景渐变"""
+        from ui.styles import get_colors
+        colors = get_colors()
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        w = self.width()
+        h = self.height()
+        r = 8  # border-radius
+        
+        # ── 1. 绘制背景 ──
+        if self.is_selected:
+            # 渐变背景：左侧从 primary_light 开始，向右淡出
+            grad = QLinearGradient(0, 0, w, 0)
+            primary_light = QColor(colors.primary_light)
+            grad.setColorAt(0, primary_light)
+            grad.setColorAt(0.4, primary_light)
+            # 右侧稍微淡一点
+            faded = QColor(colors.primary_light)
+            faded.setAlpha(int(faded.alpha() * 0.4))
+            grad.setColorAt(1, faded)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(grad)
+            painter.drawRoundedRect(0, 0, w, h, r, r)
+        elif self.is_range_selected:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colors.primary_light))
+            painter.drawRoundedRect(0, 0, w, h, r, r)
+        elif self._hovering:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colors.bg_hover))
+            painter.drawRoundedRect(0, 0, w, h, r, r)
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colors.bg_card))
+            painter.drawRoundedRect(0, 0, w, h, r, r)
+        
+        # ── 2. 绘制边框 ──
+        if self.is_selected:
+            pen = QPen(QColor(colors.primary), 3)
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(1, 1, w - 2, h - 2, r, r)
+        elif self.is_range_selected:
+            pen = QPen(QColor(colors.primary), 2)
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(1, 1, w - 2, h - 2, r, r)
+        elif self._hovering:
+            pen = QPen(QColor(colors.border), 2)
+            pen.setStyle(Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(1, 1, w - 2, h - 2, r, r)
+        
+        # ── 3. 绘制左侧竖条（仅选中/区间选中时）──
+        bar_width = 4 if self.is_selected else 3
+        if self.is_selected or self.is_range_selected:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colors.primary))
+            # 竖条：左侧圆角只画左半边，右侧直角
+            bar_rect_x = 1
+            bar_rect_y = 4
+            bar_rect_w = bar_width
+            bar_rect_h = h - 8
+            # 简单画一个小圆角矩形
+            painter.drawRoundedRect(bar_rect_x, bar_rect_y, bar_rect_w, bar_rect_h, 2, 2)
+        
+        painter.end()
 
 class ThumbnailWidget(QScrollArea):
     """
@@ -585,12 +682,14 @@ class ThumbnailWidget(QScrollArea):
     
     核心设计原则：
     - 卡片式缩略图设计，带页码标签
-    - 选中状态蓝色高亮边框
+    - 当前浏览页蓝色实框高亮
+    - 支持多选区间（Shift区间 / Ctrl切换单页）
+    - 区间选中页蓝色虚框半透明
     - 支持根据可用宽度自动调整列数
     - 实现缩略图的居中对齐
     - 支持缩略图的添加、移除和点击事件
     """
-    thumbnail_clicked = pyqtSignal(int)  # 缩略图点击信号，传递页码
+    thumbnail_clicked = pyqtSignal(int)  # 缩略图点击信号，传递页码（跳转浏览区）
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -603,6 +702,10 @@ class ThumbnailWidget(QScrollArea):
         self.vertical_spacing = 12  # 缩略图垂直间距
         self.top_margin = 12  # 顶部边距
         self.bottom_margin = 12  # 底部边距
+        
+        # 多选状态
+        self._range_selected_pages = set()  # 区间选中的页码集合
+        self._last_clicked_page = None  # 上次点击的页码（用于Shift区间选择）
         
         # 设置滚动条政策
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -668,13 +771,60 @@ class ThumbnailWidget(QScrollArea):
         """添加缩略图"""
         # 创建缩略图项
         thumbnail_item = ThumbnailItem(page_num, pixmap, self.content_widget)
-        thumbnail_item.clicked.connect(self.thumbnail_clicked.emit)
+        thumbnail_item.clicked.connect(self._on_item_clicked)
         
         # 添加到列表
         self.thumbnail_items.append(thumbnail_item)
         
         # 重新排列缩略图
         self.rearrange_thumbnails()
+    
+    def _on_item_clicked(self, page_num, mod_flag):
+        """处理缩略图点击事件，支持 Ctrl/Shift 多选"""
+        if mod_flag == 0:
+            # 普通点击：清除区间选中，跳转浏览区
+            self.clear_range_selection()
+            self._last_clicked_page = page_num
+            self.thumbnail_clicked.emit(page_num)
+        elif mod_flag == 1:
+            # Ctrl+点击：切换该页的区间选中状态
+            if page_num in self._range_selected_pages:
+                self._range_selected_pages.discard(page_num)
+                item = self._get_item_by_page(page_num)
+                if item:
+                    item.set_range_selected(False)
+            else:
+                self._range_selected_pages.add(page_num)
+                item = self._get_item_by_page(page_num)
+                if item and not item.is_selected:
+                    item.set_range_selected(True)
+            self._last_clicked_page = page_num
+            # Ctrl+点击不跳转浏览区，只更新选中状态
+            self._emit_range_navigation()
+        elif mod_flag == 2:
+            # Shift+点击：区间选择（从上次点击到当前页）
+            self.clear_range_selection()
+            if self._last_clicked_page is not None:
+                start = min(self._last_clicked_page, page_num)
+                end = max(self._last_clicked_page, page_num)
+                for pn in range(start, end + 1):
+                    self._range_selected_pages.add(pn)
+                    item = self._get_item_by_page(pn)
+                    if item and not item.is_selected:
+                        item.set_range_selected(True)
+            self._last_clicked_page = page_num
+            self._emit_range_navigation()
+    
+    def _emit_range_navigation(self):
+        """当区间选中存在时，发射跳转信号（跳转到最小页码）"""
+        all_selected = self._range_selected_pages.copy()
+        # 加上当前浏览页
+        for item in self.thumbnail_items:
+            if item.is_selected:
+                all_selected.add(item.page_num)
+                break
+        if all_selected:
+            self.thumbnail_clicked.emit(min(all_selected))
     
     def remove_all_thumbnails(self):
         """移除所有缩略图"""
@@ -721,12 +871,43 @@ class ThumbnailWidget(QScrollArea):
         self.rearrange_thumbnails()
     
     def select_thumbnail(self, page_num):
-        """选中指定页码的缩略图"""
+        """选中指定页码的缩略图（当前浏览页）
+        
+        同时清除区间选中状态，保持单选语义。
+        参考 Adobe Acrobat / pdf.js 标准：无论双页还是单页模式，
+        缩略图始终只高亮一个（当前可见的第一个页面）。
+        """
+        self.clear_range_selection()
         for thumbnail in self.thumbnail_items:
             if thumbnail.page_num == page_num:
                 thumbnail.set_selected(True)
             else:
                 thumbnail.set_selected(False)
+                thumbnail.set_range_selected(False)
+    
+    def clear_range_selection(self):
+        """清除所有区间选中状态"""
+        for page_num in list(self._range_selected_pages):
+            item = self._get_item_by_page(page_num)
+            if item:
+                item.set_range_selected(False)
+        self._range_selected_pages.clear()
+    
+    def _get_item_by_page(self, page_num):
+        """根据页码查找缩略图项"""
+        for item in self.thumbnail_items:
+            if item.page_num == page_num:
+                return item
+        return None
+    
+    def get_selected_pages(self):
+        """获取所有选中的页码（当前浏览页 + 区间选中页）"""
+        pages = set(self._range_selected_pages)
+        for item in self.thumbnail_items:
+            if item.is_selected:
+                pages.add(item.page_num)
+                break
+        return sorted(pages)
     
     def scroll_to_thumbnail(self, page_num):
         """滚动到指定页码的缩略图"""
@@ -781,6 +962,7 @@ class ThumbnailSync:
         self._updating = False  # 标记是否正在更新，防止递归
         self._user_action = False  # 标记是否为用户操作
         self._scroll_in_progress = False  # 标记是否正在滚动页面，防止递归
+        self._programmatic_scroll = False  # 标记是否为程序主动设置的滚动位置（非用户滚动）
         
         try:
             # 设置信号连接
@@ -807,8 +989,22 @@ class ThumbnailSync:
         self.thumbnail_list.thumbnail_clicked.connect(self.on_thumbnail_clicked)
     
     def _on_scroll_value_changed(self, value):
-        """滚动值变化时的处理，使用防抖机制"""
+        """滚动值变化时的处理，使用防抖机制
+        
+        程序主动设置滚动位置时（_programmatic_scroll=True）不启动防抖定时器，
+        避免程序性滚动被错误地解释为用户翻页。
+        
+        检查两处锁：
+        1. ThumbnailSync 自身的 _programmatic_scroll（缩略图点击、scroll_to_page）
+        2. 当前视图类型的 _programmatic_scroll（show_page、_scroll_to_unit）
+        """
         if not self._is_valid:
+            return
+        # 检查自身锁
+        if self._programmatic_scroll:
+            return
+        # 检查当前视图类型的锁
+        if self._is_viewtype_scrolling():
             return
         try:
             self.current_scroll_value = value
@@ -819,7 +1015,12 @@ class ThumbnailSync:
             self._is_valid = False
     
     def _on_scroll_timeout(self):
-        """防抖超时后更新缩略图位置"""
+        """防抖超时后更新缩略图位置
+        
+        核心原则：只更新缩略图高亮，不触发主视图的 show_page。
+        主视图的 current_page 由自身 show_page() 统一管理，
+        缩略图随动只做"读滚动位置→高亮缩略图"这一件事。
+        """
         if not self._is_valid or self._updating or self._user_action:
             return
         try:
@@ -827,9 +1028,10 @@ class ThumbnailSync:
             # 尝试根据滚动位置计算当前页面
             current_page = self._calculate_current_page_from_scroll(self.current_scroll_value)
             
-            # 如果计算成功，更新当前页码和缩略图状态
+            # 如果计算成功，更新缩略图高亮
             if current_page >= 0 and current_page < self.total_pages and current_page != self.current_page:
                 self.current_page = current_page
+                
                 # 高亮显示对应的缩略图
                 self.highlight_thumbnail(current_page)
                 
@@ -842,36 +1044,28 @@ class ThumbnailSync:
             self._updating = False
     
     def _calculate_current_page_from_scroll(self, scroll_value):
-        """根据滚动位置计算当前页面"""
+        """根据滚动位置计算当前页面（支持单页连续和双页连续模式）"""
         if not self._is_valid:
             return self.current_page
         try:
             # 检查是否有视图类型管理器和当前视图类型
             if hasattr(self.pdf_viewer, 'viewtype_manager') and self.pdf_viewer.viewtype_manager:
                 current_viewtype = self.pdf_viewer.viewtype_manager.current_viewtype
-                if current_viewtype and hasattr(current_viewtype, 'page_labels'):
-                    # 遍历页面标签，根据滚动位置计算当前页面
-                    cumulative_height = 0
-                    page_spacing = 10  # 默认页面间距
-                    
-                    # 尝试从常量中获取页面间距
-                    try:
-                        from utils.constants import Constants
-                        page_spacing = Constants.PAGE_SPACING.value
-                    except:
-                        pass
-                    
-                    for page_num, page_label in sorted(current_viewtype.page_labels.items()):
-                        page_height = page_label.height()
-                        
-                        # 计算页面的1/2位置
-                        half_page_height = page_height / 2
-                        
-                        # 当滚动位置超过当前页面的1/2时，返回该页面
-                        if scroll_value < cumulative_height + half_page_height + page_spacing:
-                            return page_num
-                        
-                        cumulative_height += page_height + page_spacing
+                if current_viewtype is None:
+                    return self.current_page
+                
+                viewtype_name = self.pdf_viewer.viewtype_manager.get_current_viewtype_name()
+                
+                # 判断是双页连续模式还是单页连续模式
+                if viewtype_name == "two_page_spread_continuous":
+                    # ── 双页连续模式 ──
+                    # spread_labels 键为 "spread_0", "spread_1", ...
+                    # 每个 spread 包含两页: spread_0 → page 0+1, spread_1 → page 2+3
+                    return self._calculate_page_from_spread_scroll(scroll_value, current_viewtype)
+                elif viewtype_name == "single_page_continuous":
+                    # ── 单页连续模式 ──
+                    return self._calculate_page_from_single_scroll(scroll_value, current_viewtype)
+                # 双页（非连续）和单页模式不存在滚动翻页，直接返回当前页
         except Exception as e:
             import logging
             logging.error(f"根据滚动位置计算当前页面失败: {str(e)}")
@@ -879,8 +1073,111 @@ class ThumbnailSync:
         # 如果计算失败，返回当前页面
         return self.current_page
     
+    def _is_viewtype_scrolling(self):
+        """检查当前视图类型是否在程序滚动状态中"""
+        try:
+            if hasattr(self.pdf_viewer, 'viewtype_manager') and self.pdf_viewer.viewtype_manager:
+                viewtype = self.pdf_viewer.viewtype_manager.current_viewtype
+                if viewtype and hasattr(viewtype, '_programmatic_scroll'):
+                    return viewtype._programmatic_scroll
+        except Exception:
+            pass
+        return False
+    
+    def _calculate_page_from_single_scroll(self, scroll_value, current_viewtype):
+        """单页连续模式：根据滚动位置计算当前页面"""
+        cumulative_height = 0
+        page_spacing = 10  # 默认页面间距
+        
+        try:
+            from utils.constants import Constants
+            page_spacing = Constants.PAGE_SPACING.value
+        except:
+            pass
+        
+        for page_num, page_label in sorted(current_viewtype.page_labels.items()):
+            try:
+                page_height = page_label.height()
+            except RuntimeError:
+                continue
+            
+            half_page_height = page_height / 2
+            
+            if scroll_value < cumulative_height + half_page_height + page_spacing:
+                return page_num
+            
+            cumulative_height += page_height + page_spacing
+        
+        return self.current_page
+    
+    def _calculate_page_from_spread_scroll(self, scroll_value, current_viewtype):
+        """双页连续模式：根据滚动位置计算当前页面
+        
+        spread_labels 键为 "spread_0", "spread_1", ...
+        spread_N 包含 page (N*2) 和 page (N*2+1)
+        """
+        total_pages = self.total_pages
+        
+        # 将 spread_labels 按序号排序
+        sorted_spreads = []
+        for key in current_viewtype.spread_labels:
+            try:
+                spread_num = int(key.split('_')[1])
+                sorted_spreads.append((spread_num, key))
+            except (ValueError, IndexError):
+                continue
+        sorted_spreads.sort()
+        
+        if not sorted_spreads:
+            return self.current_page
+        
+        cumulative_height = 0
+        page_spacing = 10
+        
+        try:
+            from utils.constants import Constants
+            page_spacing = Constants.PAGE_SPACING.value
+        except:
+            pass
+        
+        for spread_num, key in sorted_spreads:
+            page_label = current_viewtype.spread_labels[key]
+            try:
+                if page_label is not None:
+                    spread_height = page_label.height()
+                else:
+                    spread_height = 0
+            except RuntimeError:
+                continue
+            
+            # 每个 spread 的起始页码
+            page1_num = spread_num * 2
+            
+            # 如果是最后一个 spread 且只有一个页面
+            is_last_spread = (page1_num + 1 >= total_pages)
+            
+            half_spread_height = spread_height / 2
+            
+            if scroll_value < cumulative_height + half_spread_height + page_spacing:
+                # 滚动位置在这个 spread 内，返回左侧页码
+                # （配对右侧页码由 _get_visible_pages 自动计算）
+                return page1_num
+            
+            cumulative_height += spread_height + page_spacing
+        
+        # 如果超出所有已知 spread，返回最后一个已知 spread 的页码
+        if sorted_spreads:
+            last_spread_num = sorted_spreads[-1][0]
+            return last_spread_num * 2
+        
+        return self.current_page
+    
     def highlight_thumbnail(self, page_num):
-        """高亮显示指定页码的缩略图"""
+        """高亮显示指定页码的缩略图
+        
+        参考 pdf.js / Adobe Acrobat 标准：
+        无论双页还是单页模式，缩略图始终只高亮一个。
+        """
         if not self._is_valid:
             return
         try:
@@ -906,6 +1203,7 @@ class ThumbnailSync:
         try:
             self._updating = True
             self._user_action = True  # 标记为用户操作
+            self._programmatic_scroll = True  # 后续的滚动是程序主动设置的
             if page_num is not None and page_num >= 0 and page_num < self.total_pages:
                 # 更新当前页码
                 self.current_page = page_num
@@ -918,12 +1216,17 @@ class ThumbnailSync:
         finally:
             # 延迟重置标志，避免滚动事件干扰
             from PyQt6.QtCore import QTimer
-            QTimer.singleShot(150, self._reset_user_action)
+            QTimer.singleShot(300, self._reset_user_action)
     
     def _reset_user_action(self):
-        """重置用户操作标志"""
+        """重置用户操作标志和程序滚动标志"""
         self._updating = False
         self._user_action = False
+        self._programmatic_scroll = False
+    
+    def _reset_programmatic_scroll(self):
+        """仅重置程序滚动标志"""
+        self._programmatic_scroll = False
     
     def scroll_to_page(self, page_num):
         """滚动浏览区到指定页码的页面位置"""
@@ -934,8 +1237,12 @@ class ThumbnailSync:
             return
         try:
             self._scroll_in_progress = True
+            self._programmatic_scroll = True  # 标记为程序主动滚动
             if self.pdf_viewer and hasattr(self.pdf_viewer, 'show_page'):
                 self.pdf_viewer.show_page(page_num)
+            # 延迟重置，让布局事件处理完毕
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(300, self._reset_programmatic_scroll)
         except Exception as e:
             logging.error(f"滚动到页面失败: {str(e)}")
             self._is_valid = False
@@ -944,7 +1251,7 @@ class ThumbnailSync:
     
     def update_current_page(self, page_num):
         """更新当前页码信息"""
-        if not self._is_valid or self._updating or self._user_action:
+        if not self._is_valid or self._updating:
             return
         try:
             self._updating = True

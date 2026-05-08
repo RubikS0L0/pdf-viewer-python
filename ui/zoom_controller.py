@@ -92,12 +92,10 @@ class ZoomController:
     def zoom_fit_page(self):
         """适合页面 - 缩放页面以适应整个页面显示"""
         try:
-            # 获取页面尺寸
-            page_size = self.parent.page_renderer.get_page_size(
-                self.parent.pdf_manager.get_document(),
+            # 使用 pdf_service.get_page_size 获取页面尺寸（以 zoom=1.0 为基准）
+            page_size = self.parent.pdf_service.get_page_size(
                 self.parent.current_page,
-                1.0,
-                self.parent.pdf_manager.get_document_mutex()
+                1.0
             )
             
             if page_size == (0, 0):
@@ -108,9 +106,6 @@ class ZoomController:
             if hasattr(self.parent, 'page_cache'):
                 self.parent.page_cache.clear()
             
-            # 先显示页面（使用当前缩放级别），这样视口尺寸才会正确
-            self.parent.show_page(self.parent.current_page)
-            
             # 更新视口尺寸，获取最新的视口大小
             self.parent.viewport_manager.update_viewport_size()
             
@@ -120,7 +115,7 @@ class ZoomController:
             # 计算并设置适合页面的缩放级别
             fit_zoom = self.zoom_service.fit_page(page_size, viewport_size)
             
-            # 再次显示页面（使用新的缩放级别）
+            # 显示页面（使用新的缩放级别）
             self.parent.show_page(self.parent.current_page)
             self.update_zoom_controls()
             
@@ -163,12 +158,10 @@ class ZoomController:
             # 先更新视口尺寸，确保使用最新的视口尺寸
             self.parent.viewport_manager.update_viewport_size()
             
-            # 获取页面尺寸
-            page_size = self.parent.page_renderer.get_page_size(
-                self.parent.pdf_manager.get_document(),
+            # 使用 pdf_service.get_page_size 获取页面尺寸（以 zoom=1.0 为基准）
+            page_size = self.parent.pdf_service.get_page_size(
                 self.parent.current_page,
-                1.0,
-                self.parent.pdf_manager.get_document_mutex()
+                1.0
             )
             
             if page_size == (0, 0):

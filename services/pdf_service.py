@@ -387,7 +387,7 @@ class PDFService:
     
     @handle_specific_exceptions
     def preload_pages(self, current_page: int, preload_range: int = 2, zoom_level: float = 1.0) -> int:
-        """预加载页面到缓存
+        """预加载页面到缓存（异步方式，不阻塞主线程）
         
         参数：
         - current_page: int, 当前页面编号
@@ -395,53 +395,61 @@ class PDFService:
         - zoom_level: float, 缩放级别，默认为1.0
         
         返回：
-        - int: 预加载成功的页面数量
+        - int: 提交的预加载任务数量
         """
-        resource_manager = ResourceManager()
-        
         try:
             if not self.pdf_manager.is_open:
                 self.logger.error("预加载页面失败：无文档打开")
                 return 0
             
-            # 使用PDF处理器预加载
             pdf_path = self.pdf_manager.get_file_path()
-            preloaded = 0
+            dpi = int(96 * zoom_level)
+            submitted = 0
             
-            # 预加载当前页
-            try:
-                result = self.pdf_processor.render_page(pdf_path, current_page)
-                if result:
-                    preloaded += 1
-            except Exception as e:
-                error_info = handle_exception(e, self.logger, {"action": "preload_page", "page_num": current_page, "file": pdf_path})
-                self.logger.error(f"预加载当前页失败：{error_info.message}")
+            # 构建需要预加载的页码列表（前后各 preload_range 页 + 当前页）
+            pages_to_preload = []
+            total_pages = self.get_page_count()
+            for offset in range(preload_range + 1):
+                for page_num in {current_page + offset, current_page - offset}:
+                    if 0 <= page_num < total_pages:
+                        # 跳过已在缓存中的页面
+                        try:
+                            if not self.page_cache.get_page(page_num, zoom_level):
+                                pages_to_preload.append(page_num)
+                        except Exception:
+                            pages_to_preload.append(page_num)
             
-            # 预加载前几页
-            for i in range(1, preload_range + 1):
-                prev_page = current_page - i
-                if prev_page >= 0:
-                    try:
-                        result = self.pdf_processor.render_page(pdf_path, prev_page)
-                        if result:
-                            preloaded += 1
-                    except Exception as e:
-                        error_info = handle_exception(e, self.logger, {"action": "preload_page", "page_num": prev_page, "file": pdf_path})
-                        self.logger.error(f"预加载前页失败：{error_info.message}")
+            # 去重并保持顺序（优先预加载当前页附近）
+            seen = set()
+            unique_pages = []
+            for p in pages_to_preload:
+                if p not in seen:
+                    seen.add(p)
+                    unique_pages.append(p)
             
-            # 预加载后几页
-            for i in range(1, preload_range + 1):
-                next_page = current_page + i
-                if next_page < self.get_page_count():
-                    try:
-                        result = self.pdf_processor.render_page(pdf_path, next_page)
-                        if result:
-                            preloaded += 1
-                    except Exception as e:
-                        error_info = handle_exception(e, self.logger, {"action": "preload_page", "page_num": next_page, "file": pdf_path})
-                        self.logger.error(f"预加载后页失败：{error_info.message}")
+            def _preload_one(page_num):
+                """在线程池中执行单页预渲染并存入缓存"""
+                try:
+                    cached = self.page_cache.get_page(page_num, zoom_level)
+                    if cached:
+                        return  # 已缓存，跳过
+                    result = self.pdf_processor.render_page(pdf_path, page_num, dpi=dpi)
+                    if result:
+                        temp_path, (_w, _h) = result
+                        pixmap = QPixmap(temp_path)
+                        try:
+                            self.page_cache.add_page(page_num, zoom_level, pixmap)
+                        except Exception as e:
+                            handle_exception(e, self.logger, {"action": "preload_add_cache", "page_num": page_num})
+                except Exception as e:
+                    handle_exception(e, self.logger, {"action": "preload_render", "page_num": page_num})
             
-            return preloaded
+            # 异步提交预加载任务，不阻塞主线程
+            for page_num in unique_pages:
+                self._executor.submit(_preload_one, page_num)
+                submitted += 1
+            
+            return submitted
         except Exception as e:
             error_info = handle_exception(e, self.logger, {"action": "preload_pages", "current_page": current_page, "range": preload_range})
             return 0

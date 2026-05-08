@@ -54,82 +54,37 @@ class TwoPageViewtype(BrowsingViewtype):
         # 发布页面更新事件
         self._on_page_changed(page_num)
         
-        # 定义异步渲染完成后的回调函数
-        def render_callback(combined_pixmap, is_final=False):
-            if combined_pixmap is not None and self.page_label is not None and self.is_active:
-                # 显示合并后的页面
-                self.set_page_pixmap(combined_pixmap)
-                self.update_config()
-                
-                # 确保合并页面在viewport中居中显示
-                if self.scroll_area is not None and self.page_label is not None:
-                    scroll_area = self.scroll_area
-                    if scroll_area is not None:
-                        # 暂时禁用自动调整大小
-                        scroll_area.setWidgetResizable(False)
-                        
-                        # 滚动到页面中心
-                        scroll_area.ensureWidgetVisible(self.page_label)
-                        
-                        # 计算滚动条位置，使页面居中
-                        v_scroll = scroll_area.verticalScrollBar()
-                        h_scroll = scroll_area.horizontalScrollBar()
-                        
-                        if v_scroll is not None and h_scroll is not None:
-                            # 计算垂直居中位置
-                            page_height = self.page_label.height() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                            viewport_height = scroll_area.viewport().height()
-                            v_pos = max(0, (page_height - viewport_height) // 2)
-                            
-                            # 计算水平居中位置
-                            page_width = self.page_label.width() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                            viewport_width = scroll_area.viewport().width()
-                            h_pos = max(0, (page_width - viewport_width) // 2)
-                            
-                            # 设置滚动条位置
-                            v_scroll.setValue(v_pos)
-                            h_scroll.setValue(h_pos)
-                        
-                        # 重新启用自动调整大小
-                        scroll_area.setWidgetResizable(True)
-        
         # 直接合并两页并显示
         combined_pixmap = self._merge_two_pages(page1_num, page2_num)
         if combined_pixmap is not None:
             self.set_page_pixmap(combined_pixmap)
             self.update_config()
-            
-            # 确保合并页面在viewport中居中显示
-            if self.scroll_area is not None and self.page_label is not None:
-                scroll_area = self.scroll_area
-                if scroll_area is not None:
-                    # 暂时禁用自动调整大小
-                    scroll_area.setWidgetResizable(False)
-                    
-                    # 滚动到页面中心
-                    scroll_area.ensureWidgetVisible(self.page_label)
-                    
-                    # 计算滚动条位置，使页面居中
-                    v_scroll = scroll_area.verticalScrollBar()
-                    h_scroll = scroll_area.horizontalScrollBar()
-                    
-                    if v_scroll is not None and h_scroll is not None:
-                        # 计算垂直居中位置
-                        page_height = self.page_label.height() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                        viewport_height = scroll_area.viewport().height()
-                        v_pos = max(0, (page_height - viewport_height) // 2)
-                        
-                        # 计算水平居中位置
-                        page_width = self.page_label.width() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                        viewport_width = scroll_area.viewport().width()
-                        h_pos = max(0, (page_width - viewport_width) // 2)
-                        
-                        # 设置滚动条位置
-                        v_scroll.setValue(v_pos)
-                        h_scroll.setValue(h_pos)
-                    
-                    # 重新启用自动调整大小
-                    scroll_area.setWidgetResizable(True)
+            self._center_spread_in_viewport()
+    
+    def _center_spread_in_viewport(self):
+        """将合并双页居中显示在视口中"""
+        if self.scroll_area is None or self.page_label is None:
+            return
+        
+        scroll_area = self.scroll_area
+        v_scroll = scroll_area.verticalScrollBar()
+        h_scroll = scroll_area.horizontalScrollBar()
+        
+        if v_scroll is None or h_scroll is None:
+            return
+        
+        # 使用 pixmap 尺寸计算，避免 label.height() 在布局未完成时返回 0
+        pixmap = self.page_label.pixmap()
+        page_height = pixmap.height() if pixmap is not None else 0
+        page_width = pixmap.width() if pixmap is not None else 0
+        viewport_height = scroll_area.viewport().height()
+        viewport_width = scroll_area.viewport().width()
+        
+        v_pos = max(0, (page_height - viewport_height) // 2)
+        h_pos = max(0, (page_width - viewport_width) // 2)
+        
+        v_scroll.setValue(v_pos)
+        h_scroll.setValue(h_pos)
     
     def _on_render_completed(self, page_num, result, is_final):
         """处理渲染完成事件"""
@@ -156,36 +111,5 @@ class TwoPageViewtype(BrowsingViewtype):
             if combined_pixmap is not None:
                 self.set_page_pixmap(combined_pixmap)
                 self.update_config()
-                
-                # 确保合并页面在viewport中居中显示
-                if self.scroll_area is not None and self.page_label is not None:
-                    scroll_area = self.scroll_area
-                    if scroll_area is not None:
-                        # 暂时禁用自动调整大小
-                        scroll_area.setWidgetResizable(False)
-                        
-                        # 滚动到页面中心
-                        scroll_area.ensureWidgetVisible(self.page_label)
-                        
-                        # 计算滚动条位置，使页面居中
-                        v_scroll = scroll_area.verticalScrollBar()
-                        h_scroll = scroll_area.horizontalScrollBar()
-                        
-                        if v_scroll is not None and h_scroll is not None:
-                            # 计算垂直居中位置
-                            page_height = self.page_label.height() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                            viewport_height = scroll_area.viewport().height()
-                            v_pos = max(0, (page_height - viewport_height) // 2)
-                            
-                            # 计算水平居中位置
-                            page_width = self.page_label.width() if (self.page_label is not None and self.page_label.pixmap() is not None) else 0
-                            viewport_width = scroll_area.viewport().width()
-                            h_pos = max(0, (page_width - viewport_width) // 2)
-                            
-                            # 设置滚动条位置
-                            v_scroll.setValue(v_pos)
-                            h_scroll.setValue(h_pos)
-                        
-                        # 重新启用自动调整大小
-                        scroll_area.setWidgetResizable(True)
+                self._center_spread_in_viewport()
 

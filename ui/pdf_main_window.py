@@ -1031,13 +1031,13 @@ class PDFMainWindow(QMainWindow):
                 move_step = 20
                 
                 # 处理方向键
-                if key == Qt.Key.Up:
+                if key == Qt.Key.Key_Up:
                     self._handle_up_arrow(v_scroll, move_step)
-                elif key == Qt.Key.Down:
+                elif key == Qt.Key.Key_Down:
                     self._handle_down_arrow(v_scroll, move_step)
-                elif key == Qt.Key.Left:
+                elif key == Qt.Key.Key_Left:
                     self._handle_left_arrow(h_scroll, move_step)
-                elif key == Qt.Key.Right:
+                elif key == Qt.Key.Key_Right:
                     self._handle_right_arrow(h_scroll, move_step)
         except RuntimeError as e:
             if 'wrapped C/C++ object has been deleted' in str(e):
@@ -1125,10 +1125,14 @@ class PDFMainWindow(QMainWindow):
             # 设置关闭标志
             self._is_closing = True
             
-            # 清理各种资源
-            self._cleanup_viewport_manager()
-            self._cleanup_thumbnail_manager()
+            # 清理顺序：先清理依赖 viewport_manager 的资源，再清理 viewport_manager 本身
+            # 1. 先清理页面缓存和文档（不依赖 viewport_manager）
             self._cleanup_page_cache()
+            # 2. 清理缩略图（不依赖 viewport_manager）
+            self._cleanup_thumbnail_manager()
+            # 3. 最后清理 viewport_manager
+            self._cleanup_viewport_manager()
+            # 4. 清理日志和过程文件
             self._cleanup_logs()
             self._cleanup_process_files()
         except RuntimeError as e:

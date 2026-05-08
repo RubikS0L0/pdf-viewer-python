@@ -5,6 +5,7 @@ __pycache__/
 
 # Logs
 *.log
+pdf_viewer.log
 
 # IDE
 .vscode/
@@ -39,3 +40,17 @@ models/best.onnx
 
 # Test PDFs
 PDF for test/
+
+# WorkBuddy memory (local workspace)
+.workbuddy/
+
+# Test outputs and diagnostics
+tests/*_output*.txt
+tests/_diag*.py
+tests/perf_test*.py
+tests/performance_test*.md
+
+# Local scripts
+run.bat
+run.ps1
+ocr_extract.py

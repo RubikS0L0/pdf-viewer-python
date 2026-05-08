@@ -56,6 +56,17 @@ class SinglePageContinuousViewtype(ContinuousViewtype):
         if unit_num not in self.page_labels:
             try:
                 page_label = ViewtypePageLabel(self)
+                # 布局与内容解耦：在 addWidget 前用 get_page_size 预测尺寸并设置占位，
+                # 让布局引擎在异步渲染完成前就知道 widget 的真实高度
+                try:
+                    predicted_size = self.viewtype_service.get_page_size(
+                        unit_num, self.zoom_level)
+                    logging.warning(f"[_show_single_unit] unit_num={unit_num}, predicted_size={predicted_size}, zoom={self.zoom_level}")
+                    if predicted_size and predicted_size[0] > 0 and predicted_size[1] > 0:
+                        page_label.setMinimumSize(predicted_size[0], predicted_size[1])
+                        logging.warning(f"[_show_single_unit] setMinimumSize({predicted_size[0]}, {predicted_size[1]})")
+                except Exception as e:
+                    logging.warning(f"单页连续视图类型: 获取页面预测尺寸失败，页码：{unit_num}，错误：{str(e)}")
                 # 连接信号，在页面显示后更新布局
                 page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
                 self.page_labels[unit_num] = page_label
@@ -92,8 +103,8 @@ class SinglePageContinuousViewtype(ContinuousViewtype):
             logging.debug(f"_scroll_to_unit: 页面 {unit_num} 的标签为None，跳过滚动")
             return
             
-        # 强制更新所有页面标签的大小，确保高度计算准确
-        for p in list(self.page_labels.keys()):
+        # 强制更新所有页面标签的大小，确保高度计算准确（按页码升序处理）
+        for p in sorted(self.page_labels.keys()):
             page_label = self.page_labels.get(p)
             try:
                 if page_label is not None:
@@ -110,50 +121,112 @@ class SinglePageContinuousViewtype(ContinuousViewtype):
             self.pages_layout.invalidate()
             self.pages_layout.activate()
             
-        # 等待布局更新完成
-        QApplication.processEvents()
-        
-        # 计算当前页在垂直布局中的位置
-        target_y = 0
+        # 让布局引擎处理完排队的更新后再计算滚动位置
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self._scroll_to_unit_deferred(unit_num))
+
+    def _scroll_to_unit_deferred(self, unit_num):
+        """延迟执行的滚动定位（布局稳定后再计算）"""
+        if self.scroll_area is None:
+            return
+        v_scroll = self.scroll_area.verticalScrollBar()
+        if not v_scroll:
+            return
+
+        current_page_label = self.page_labels.get(unit_num)
+        if current_page_label is None:
+            return
+
         from utils.constants import Constants
-        spacing = Constants.PAGE_SPACING.value  # 使用统一的页面间距
-        
-        for p in range(unit_num):
-            if p in self.page_labels:
-                page_label = self.page_labels.get(p)
+        spacing = Constants.PAGE_SPACING.value
+
+        # 关键修复：遍历实际布局中的 widget，而不是按页码累加
+        # 布局中的 widget 顺序才是正确的累计顺序
+        target_y = 0
+        target_widget = None
+
+        logging.warning(f"[_scroll_to_unit_deferred] unit={unit_num}, layout_count={self.pages_layout.count() if self.pages_layout else 0}")
+        if self.pages_layout is not None:
+            for i in range(self.pages_layout.count()):
+                item = self.pages_layout.itemAt(i)
+                widget = item.widget()
+                if widget is not None:
+                    # 找到目标页面时，停止累加（不需要加目标 widget 自己的高度）
+                    if widget == current_page_label:
+                        target_widget = widget
+                        logging.warning(f"[_scroll_to_unit_deferred] found target at i={i}, widget={id(widget)}, accumulated before adding target={target_y}")
+                        break
+                    # 累加当前 widget 的高度
+                    h = widget.height()
+                    min_h = widget.minimumSize().height()
+                    hint_h = widget.sizeHint().height()
+                    used_h = h if h > 0 else (min_h if min_h > 0 else hint_h)
+                    logging.warning(f"[_scroll_to_unit_deferred] i={i}, h={h}, min={min_h}, hint={hint_h}, used={used_h}")
+                    target_y += used_h + spacing
+
+        logging.warning(f"[_scroll_to_unit_deferred] FINAL target_y={target_y}, target_widget={'found' if target_widget else 'NOT found'}")
+
+        # 如果布局遍历失败，使用旧的备选方案
+        if target_widget is None:
+            logging.warning(f"[_scroll_to_unit_deferred] layout traversal failed, using fallback")
+            target_y = 0
+            # 估算平均高度
+            estimated_height = 620
+            for p, pl in sorted(self.page_labels.items()):
                 try:
-                    # 检查page_label是否仍然有效
-                    if page_label is not None:
-                        # 使用 sizeHint 获取期望高度，如果实际高度为0
-                        height = page_label.height()
-                        if height == 0:
-                            height = page_label.sizeHint().height()
-                        target_y += height + spacing
+                    if pl:
+                        h = pl.height()
+                        if h == 0:
+                            h = pl.minimumSize().height()
+                            if h == 0:
+                                h = pl.sizeHint().height()
+                        if h > 0:
+                            estimated_height = (estimated_height + h) // 2
                 except Exception:
-                    # 如果page_label已被删除或无效，跳过
-                    continue
-        
+                    pass
+
+            for p in range(unit_num):
+                if p in self.page_labels:
+                    pl = self.page_labels.get(p)
+                    if pl:
+                        h = pl.height()
+                        if h == 0:
+                            h = pl.minimumSize().height()
+                            if h == 0:
+                                h = pl.sizeHint().height()
+                        target_y += h + spacing
+                else:
+                    target_y += estimated_height + spacing
+
         # 获取视口大小
         viewport_height = self.scroll_area.viewport().height()
-        
-        # 获取当前页面的高度（重新获取以确保有效性）
+
+        # 获取当前页面的高度
+        # 优先使用 minimumSize（我们在 _show_single_unit 中设置的预测高度），
+        # 而不是 sizeHint（sizeHint 在没有 pixmap 时返回很小的默认值）
         try:
             current_page_height = current_page_label.height()
-            # 如果实际高度为0，使用 sizeHint
             if current_page_height == 0:
-                current_page_height = current_page_label.sizeHint().height()
+                current_page_height = current_page_label.minimumSize().height()
+                if current_page_height == 0:
+                    current_page_height = current_page_label.sizeHint().height()
         except Exception:
-            # 如果current_page_label已被删除或无效，返回
-            logging.debug(f"_scroll_to_unit: 无法获取页面 {unit_num} 的高度，跳过滚动")
             return
-        
+
         # 计算滚动位置，使当前页面居中显示
         scroll_position = target_y - (viewport_height - current_page_height) // 2
         scroll_position = max(0, scroll_position)
-        
-        # 更新滚动条位置
+
+        logging.warning(f"[_scroll_to_unit_deferred] scroll_position={scroll_position}, target_y={target_y}, viewport={viewport_height}, current_height={current_page_height}")
+
+        # 程序主动设置滚动位置时，阻断 valueChanged 信号
+        # 防止 ThumbnailSync 把这次滚动解释为用户翻页
+        self._programmatic_scroll = True
         v_scroll.setValue(scroll_position)
-    
+        # 延迟释放锁
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(300, self._release_programmatic_scroll)
+
     def _get_current_unit(self, page_num):
         """获取当前页码对应的单元索引（页码即单元索引）"""
         return page_num
@@ -212,39 +285,22 @@ class SinglePageContinuousViewtype(ContinuousViewtype):
         if page_label is None:
             return
             
-        # 确保在主线程中执行GUI操作
-        def update_gui():
-            try:
-                logging.debug(f"单页连续视图类型: 设置页面标签的pixmap，页码：{page_num}，pixmap大小：{result.size()}")
-                page_label.setPixmap(result)
-                page_label.show()
-                logging.debug(f"单页连续视图类型: 页面标签显示，页码：{page_num}，可见性：{page_label.isVisible()}")
-                
-                # 确保布局更新
-                self.viewtype_service.update_content_layout()
-                
-                # 强制scroll_area的widget调整大小
-                if self.scroll_area is not None and self.scroll_area.widget() is not None:
-                    self.scroll_area.widget().adjustSize()
-            except Exception as e:
-                logging.error(f"单页连续视图类型: 设置页面标签的pixmap失败，页码：{page_num}，错误：{str(e)}")
-                # 如果页面标签已被删除，重新创建
-                if "wrapped C/C++ object has been deleted" in str(e):
-                    try:
-                        new_page_label = ViewtypePageLabel(self)
-                        new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
-                        self.page_labels[page_num] = new_page_label
-                        self.pages_layout.addWidget(new_page_label)
-                        new_page_label.setPixmap(result)
-                        new_page_label.show()
-                        logging.debug(f"单页连续视图类型: 重新创建并添加了页面标签，页码：{page_num}，标签ID：{id(new_page_label)}")
-                        
-                        # 确保布局更新
-                        self.viewtype_service.update_content_layout()
-                    except Exception as e2:
-                        logging.error(f"单页连续视图类型: 重新创建页面标签失败，页码：{page_num}，错误：{str(e2)}")
-        
-        # 使用QTimer.singleShot确保在主线程中执行
-        from PyQt6.QtCore import QTimer
-        if QApplication.instance():
-            QTimer.singleShot(0, update_gui)
+        # 同步设置 pixmap（避免异步回调中的 adjustSize 导致回跳）
+        try:
+            page_label.setPixmap(result)
+            page_label.show()
+            logging.debug(f"单页连续视图类型: 设置页面标签的pixmap，页码：{page_num}，pixmap大小：{result.size()}")
+        except Exception as e:
+            logging.error(f"单页连续视图类型: 设置页面标签的pixmap失败，页码：{page_num}，错误：{str(e)}")
+            # 如果页面标签已被删除，重新创建
+            if "wrapped C/C++ object has been deleted" in str(e):
+                try:
+                    new_page_label = ViewtypePageLabel(self)
+                    new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
+                    self.page_labels[page_num] = new_page_label
+                    self.pages_layout.addWidget(new_page_label)
+                    new_page_label.setPixmap(result)
+                    new_page_label.show()
+                    logging.debug(f"单页连续视图类型: 重新创建并添加了页面标签，页码：{page_num}，标签ID：{id(new_page_label)}")
+                except Exception as e2:
+                    logging.error(f"单页连续视图类型: 重新创建页面标签失败，页码：{page_num}，错误：{str(e2)}")

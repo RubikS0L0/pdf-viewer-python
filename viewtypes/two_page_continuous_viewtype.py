@@ -55,6 +55,18 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
         if spread_key not in self.spread_labels:
             try:
                 page_label = ViewtypePageLabel(self)
+                # 布局与内容解耦：在 addWidget 前预测双页合并尺寸并设置占位
+                try:
+                    from utils.constants import Constants
+                    spacing = Constants.PAGE_SPACING.value
+                    size1 = self.viewtype_service.get_page_size(page1_num, self.zoom_level)
+                    size2 = self.viewtype_service.get_page_size(page2_num, self.zoom_level) if page2_num != page1_num else (0, 0)
+                    if size1 and size1[0] > 0 and size1[1] > 0:
+                        w = size1[0] + (size2[0] if size2 else 0) + (spacing if size2 and size2[0] > 0 else 0)
+                        h = max(size1[1], size2[1] if size2 else 0)
+                        page_label.setMinimumSize(w, h)
+                except Exception as e:
+                    logging.debug(f"双页连续视图类型: 获取双页预测尺寸失败，双页索引：{unit_num}，错误：{str(e)}")
                 # 连接信号，在页面显示后更新布局
                 page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
                 self.spread_labels[spread_key] = page_label
@@ -65,53 +77,29 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
                 return
         else:
             page_label = self.spread_labels[spread_key]
-            logging.debug(f"双页连续视图类型: 获取了现有双页标签，双页索引：{unit_num}，标签ID：{id(page_label)}")
         
-        # 直接合并两页并显示
+        # 直接合并两页并设置pixmap（同步操作，不使用 QTimer.singleShot）
+        # 这避免了异步回调中 adjustSize() 改变滚动区域高度导致的回跳问题
         combined_pixmap = self._merge_two_pages(page1_num, page2_num)
         if combined_pixmap is not None:
-            # 确保在主线程中执行GUI操作
-            from PyQt6.QtWidgets import QApplication
-            
-            def update_gui():
-                try:
-                    logging.debug("双页连续视图类型: 设置双页标签的pixmap，双页索引：%d，pixmap大小：%s", unit_num, combined_pixmap.size())
-                    page_label.setPixmap(combined_pixmap)
-                    page_label.show()
-                    logging.debug("双页连续视图类型: 双页标签显示，双页索引：%d，可见性：%s", unit_num, page_label.isVisible())
-                    
-                    # 直接调用update_content_layout来确保布局被正确更新
-                    logging.debug("双页连续视图类型: 调用update_content_layout更新布局")
-                    self.viewtype_service.update_content_layout()
-                    logging.debug("双页连续视图类型: 布局更新完成")
-                    
-                    # 强制scroll_area的widget调整大小
-                    if self.scroll_area is not None and self.scroll_area.widget() is not None:
-                        logging.debug("双页连续视图类型: 调整scroll_area widget大小")
-                        self.scroll_area.widget().adjustSize()
-                        logging.debug("双页连续视图类型: scroll_area widget大小调整完成")
-                except Exception as e:
-                    logging.error("双页连续视图类型: 设置双页标签的pixmap失败，双页索引：%d，错误：%s", unit_num, str(e))
-                    # 如果页面标签已被删除，重新创建
-                    if "wrapped C/C++ object has been deleted" in str(e):
-                        try:
-                            new_page_label = ViewtypePageLabel(self)
-                            new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
-                            self.spread_labels[spread_key] = new_page_label
-                            self.pages_layout.addWidget(new_page_label)
-                            new_page_label.setPixmap(combined_pixmap)
-                            new_page_label.show()
-                            logging.debug("双页连续视图类型: 重新创建并添加了双页标签，双页索引：%d，标签ID：%s", unit_num, id(new_page_label))
-                            
-                            # 确保布局更新
-                            self.viewtype_service.update_content_layout()
-                        except Exception as e2:
-                            logging.error("双页连续视图类型: 重新创建双页标签失败，双页索引：%d，错误：%s", unit_num, str(e2))
-            
-            # 使用QTimer.singleShot确保在主线程中执行
-            from PyQt6.QtCore import QTimer
-            if QApplication.instance():
-                QTimer.singleShot(0, update_gui)
+            try:
+                page_label.setPixmap(combined_pixmap)
+                page_label.show()
+                logging.debug(f"双页连续视图类型: 设置双页标签的pixmap，双页索引：{unit_num}，pixmap大小：{combined_pixmap.size()}")
+            except Exception as e:
+                logging.error(f"双页连续视图类型: 设置双页标签的pixmap失败，双页索引：{unit_num}，错误：{str(e)}")
+                # 如果页面标签已被删除，重新创建
+                if "wrapped C/C++ object has been deleted" in str(e):
+                    try:
+                        new_page_label = ViewtypePageLabel(self)
+                        new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
+                        self.spread_labels[spread_key] = new_page_label
+                        self.pages_layout.addWidget(new_page_label)
+                        new_page_label.setPixmap(combined_pixmap)
+                        new_page_label.show()
+                        logging.debug(f"双页连续视图类型: 重新创建并添加了双页标签，双页索引：{unit_num}，标签ID：{id(new_page_label)}")
+                    except Exception as e2:
+                        logging.error(f"双页连续视图类型: 重新创建双页标签失败，双页索引：{unit_num}，错误：{str(e2)}")
     
     def _scroll_to_unit(self, unit_num):
         """滚动到指定单元（双页）"""
@@ -127,8 +115,8 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
         if not v_scroll:
             return
             
-        # 强制更新所有双页标签的大小，确保高度计算准确
-        for key in self.spread_labels:
+        # 强制更新所有双页标签的大小，确保高度计算准确（按索引升序处理）
+        for key in sorted(self.spread_labels.keys(), key=lambda k: int(k.split('_')[1])):
             page_label = self.spread_labels[key]
             try:
                 if page_label is not None:
@@ -146,53 +134,111 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
             self.pages_layout.invalidate()
             self.pages_layout.activate()
             
-        # 等待布局更新完成
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
+        # 延迟执行滚动定位，避免 processEvents 重入
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self._scroll_to_unit_deferred(unit_num))
+    
+    def _scroll_to_unit_deferred(self, unit_num):
+        """延迟执行的滚动定位（布局稳定后再计算）"""
+        spread_key = f"spread_{unit_num}"
+        if spread_key not in self.spread_labels:
+            return
         
-        # 计算当前双页在垂直布局中的位置
+        if self.scroll_area is None:
+            return
+        
+        v_scroll = self.scroll_area.verticalScrollBar()
+        if not v_scroll:
+            return
+        
+        current_spread_label = self.spread_labels.get(spread_key)
+        if current_spread_label is None:
+            return
         target_y = 0
         from utils.constants import Constants
-        spacing = Constants.PAGE_SPACING.value  # 使用统一的页面间距
+        spacing = Constants.PAGE_SPACING.value
         
+        # 计算已存在 spread 标签的平均高度，用于估算缺失的高度
+        estimated_height = 0
+        label_count = 0
+        for key, sl in sorted(self.spread_labels.items(), key=lambda x: int(x[0].split('_')[1])):
+            try:
+                if sl is not None:
+                    h = sl.height()
+                    if h == 0:
+                        h = sl.minimumSize().height()
+                        if h == 0:
+                            h = sl.sizeHint().height()
+                    if h > 0:
+                        estimated_height += h
+                        label_count += 1
+            except Exception:
+                continue
+        if label_count > 0:
+            estimated_height = estimated_height // label_count
+            # 确保 estimated_height 至少有一个合理的最小值
+            if estimated_height < 100:
+                estimated_height = 620
+        else:
+            try:
+                estimated_height = current_spread_label.height()
+                if estimated_height == 0:
+                    estimated_height = current_spread_label.minimumSize().height()
+                    if estimated_height == 0:
+                        estimated_height = current_spread_label.sizeHint().height()
+                if estimated_height < 100:
+                    estimated_height = 620
+            except Exception:
+                estimated_height = 620
+
         for i in range(unit_num):
             key = f"spread_{i}"
             if key in self.spread_labels:
                 page_label = self.spread_labels[key]
                 try:
                     if page_label is not None:
-                        # 使用 sizeHint 获取期望高度，如果实际高度为0
                         height = page_label.height()
                         if height == 0:
-                            height = page_label.sizeHint().height()
+                            height = page_label.minimumSize().height()
+                            if height == 0:
+                                height = page_label.sizeHint().height()
                         target_y += height + spacing
                 except Exception:
-                    # 如果page_label已被删除或无效，跳过
-                    continue
+                    target_y += estimated_height + spacing
+            else:
+                target_y += estimated_height + spacing
         
         # 获取视口大小
         viewport_height = self.scroll_area.viewport().height()
-        
+
         # 获取当前双页的高度
+        # 优先使用 minimumSize（我们在 _show_single_unit 中设置的预测高度），
+        # 而不是 sizeHint
         current_spread_label = self.spread_labels[spread_key]
         try:
             if current_spread_label is not None:
                 current_spread_height = current_spread_label.height()
-                # 如果实际高度为0，使用 sizeHint
                 if current_spread_height == 0:
-                    current_spread_height = current_spread_label.sizeHint().height()
+                    current_spread_height = current_spread_label.minimumSize().height()
+                    if current_spread_height == 0:
+                        current_spread_height = current_spread_label.sizeHint().height()
             else:
                 return
         except Exception:
-            # 如果current_spread_label已被删除或无效，返回
             return
         
         # 计算滚动位置，使当前双页居中显示
         scroll_position = target_y - (viewport_height - current_spread_height) // 2
         scroll_position = max(0, scroll_position)
         
+        # 程序主动设置滚动位置时，阻断 valueChanged 信号
+        # 防止 ThumbnailSync 把这次滚动解释为用户翻页
+        self._programmatic_scroll = True
         # 更新滚动条位置
         v_scroll.setValue(scroll_position)
+        # 延迟释放锁
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(300, self._release_programmatic_scroll)
     
     def _get_current_unit(self, page_num):
         """获取当前页码对应的单元索引（双页索引）"""
@@ -254,12 +300,25 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
                         spread_num = int(spread_key.split('_')[1])
                         page1_num = spread_num * 2
                         page2_num = min(page1_num + 1, self.viewtype_service.get_total_pages() - 1)
-                        
+
                         # 使用基类的双页合并方法
                         combined_pixmap = self._merge_two_pages(page1_num, page2_num)
-                        
+
                         if combined_pixmap is not None:
                             label.setPixmap(combined_pixmap)
+                        else:
+                            # 保底：pixmap 为 None 时预测双页合并尺寸，防止缩小时残留
+                            try:
+                                from utils.constants import Constants
+                                spacing = Constants.PAGE_SPACING.value
+                                size1 = self.viewtype_service.get_page_size(page1_num, new_value)
+                                size2 = self.viewtype_service.get_page_size(page2_num, new_value) if page2_num != page1_num else (0, 0)
+                                if size1 and size1[0] > 0 and size1[1] > 0:
+                                    w = size1[0] + (size2[0] if size2 else 0) + (spacing if size2 and size2[0] > 0 else 0)
+                                    h = max(size1[1], size2[1] if size2 else 0)
+                                    label.setMinimumSize(w, h)
+                            except Exception:
+                                pass
         except Exception as e:
             self._handle_exception(f"处理状态变化失败: {str(e)}")
             # 尝试回滚到之前的状态
@@ -286,48 +345,21 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
         page1_num = spread_num * 2
         page2_num = min(page1_num + 1, self.viewtype_service.get_total_pages() - 1)
         
-        # 重新合并两页并显示
+        # 重新合并两页并显示（同步操作，避免异步回调中的 adjustSize 问题）
         combined_pixmap = self._merge_two_pages(page1_num, page2_num)
         if combined_pixmap is not None:
-            # 确保在主线程中执行GUI操作
-            from PyQt6.QtWidgets import QApplication
-            
-            def update_gui():
-                try:
-                    logging.debug("双页连续视图类型: 设置双页标签的pixmap，双页索引：%d，pixmap大小：%s", spread_num, combined_pixmap.size())
-                    page_label.setPixmap(combined_pixmap)
-                    page_label.show()
-                    logging.debug("双页连续视图类型: 双页标签显示，双页索引：%d，可见性：%s", spread_num, page_label.isVisible())
-                    
-                    # 直接调用update_content_layout来确保布局被正确更新
-                    logging.debug("双页连续视图类型: 调用update_content_layout更新布局")
-                    self.viewtype_service.update_content_layout()
-                    logging.debug("双页连续视图类型: 布局更新完成")
-                    
-                    # 强制scroll_area的widget调整大小
-                    if self.scroll_area is not None and self.scroll_area.widget() is not None:
-                        logging.debug("双页连续视图类型: 调整scroll_area widget大小")
-                        self.scroll_area.widget().adjustSize()
-                        logging.debug("双页连续视图类型: scroll_area widget大小调整完成")
-                except Exception as e:
-                    logging.error("双页连续视图类型: 设置双页标签的pixmap失败，双页索引：%d，错误：%s", spread_num, str(e))
-                    # 如果页面标签已被删除，重新创建
-                    if "wrapped C/C++ object has been deleted" in str(e):
-                        try:
-                            new_page_label = ViewtypePageLabel(self)
-                            new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
-                            self.spread_labels[spread_key] = new_page_label
-                            self.pages_layout.addWidget(new_page_label)
-                            new_page_label.setPixmap(combined_pixmap)
-                            new_page_label.show()
-                            logging.debug("双页连续视图类型: 重新创建并添加了双页标签，双页索引：%d，标签ID：%s", spread_num, id(new_page_label))
-                            
-                            # 确保布局更新
-                            self.viewtype_service.update_content_layout()
-                        except Exception as e2:
-                            logging.error("双页连续视图类型: 重新创建双页标签失败，双页索引：%d，错误：%s", spread_num, str(e2))
-            
-            # 使用QTimer.singleShot确保在主线程中执行
-            from PyQt6.QtCore import QTimer
-            if QApplication.instance():
-                QTimer.singleShot(0, update_gui)
+            try:
+                page_label.setPixmap(combined_pixmap)
+                page_label.show()
+            except Exception as e:
+                logging.error(f"双页连续视图类型: 渲染完成设置pixmap失败，双页索引：{spread_num}，错误：{str(e)}")
+                if "wrapped C/C++ object has been deleted" in str(e):
+                    try:
+                        new_page_label = ViewtypePageLabel(self)
+                        new_page_label.pixmapChanged.connect(self.viewtype_service.update_content_layout)
+                        self.spread_labels[spread_key] = new_page_label
+                        self.pages_layout.addWidget(new_page_label)
+                        new_page_label.setPixmap(combined_pixmap)
+                        new_page_label.show()
+                    except Exception as e2:
+                        logging.error(f"双页连续视图类型: 渲染完成重新创建标签失败，双页索引：{spread_num}，错误：{str(e2)}")

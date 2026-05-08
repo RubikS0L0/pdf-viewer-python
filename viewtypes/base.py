@@ -38,38 +38,40 @@ def throttle(delay=None):
     
     返回:
         装饰后的函数
+    
+    注意：状态存储在实例的 __dict__ 上（键名为 _throttle_{func_name}），
+    保证不同实例之间互相独立，不存在共享状态问题。
     """
     # 从配置文件获取默认延迟时间
     if delay is None:
         ui_config = config_loader.get_ui_config()
         delay = ui_config.get("throttle_delay", 16)
     def decorator(func):
-        last_call_time = 0
-        is_throttling = False
+        _attr = f"_throttle_{func.__name__}"  # 每个函数使用独立的实例属性键
         
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            nonlocal last_call_time, is_throttling
+            # 每个实例独立维护自己的节流状态，存储在实例的 __dict__ 中
+            state = self.__dict__.setdefault(_attr, {"last_call_time": 0, "is_throttling": False})
             current_time = time.time() * 1000  # 转换为毫秒
             
-            if current_time - last_call_time >= delay:
-                # 如果超过延迟时间，立即执行
+            if current_time - state["last_call_time"] >= delay:
+                # 超过延迟时间，立即执行
                 func(self, *args, **kwargs)
-                last_call_time = current_time
-                is_throttling = False
-            elif not is_throttling:
-                # 如果在延迟时间内，且没有正在延迟的调用，使用QTimer执行延迟调用
-                is_throttling = True
+                state["last_call_time"] = current_time
+                state["is_throttling"] = False
+            elif not state["is_throttling"]:
+                # 在延迟时间内，且没有正在排队的延迟调用，使用QTimer延迟执行
+                state["is_throttling"] = True
                 
                 from PyQt6.QtCore import QTimer, QCoreApplication
                 
                 def delayed_call():
-                    nonlocal last_call_time, is_throttling
-                    current_time = time.time() * 1000
-                    if is_throttling and current_time - last_call_time >= delay:
+                    new_time = time.time() * 1000
+                    if state["is_throttling"] and new_time - state["last_call_time"] >= delay:
                         func(self, *args, **kwargs)
-                        last_call_time = current_time
-                        is_throttling = False
+                        state["last_call_time"] = new_time
+                        state["is_throttling"] = False
                 
                 # 使用QTimer确保在主线程中执行
                 if QCoreApplication.instance():
@@ -78,11 +80,6 @@ def throttle(delay=None):
         return wrapper
     
     return decorator
-"""
-浏览模式抽象基类
-定义所有浏览模式必须实现的核心方法
-包含PageLabel的所有核心功能
-"""
 
 class ViewtypePageLabel(QLabel):
     """自定义页面显示标签，与浏览视图类型关联"""
@@ -101,8 +98,12 @@ class ViewtypePageLabel(QLabel):
         """设置页面图像"""
         self.current_pixmap = pixmap
         super().setPixmap(pixmap)
+        # 布局与内容解耦：同步设置 minimumSize，让布局引擎在异步渲染前
+        # 就知道 widget 的真实尺寸，消除高度从 0 突变的 TOCTOU 竞态
+        if pixmap is not None:
+            self.setMinimumSize(pixmap.size())
         self.updateGeometry()
-        
+
         # 触发信号，通知布局更新
         self.pixmapChanged.emit()
         
@@ -626,6 +627,32 @@ class BrowsingViewtype(ABC):
         # 设置滚动位置
         v_scroll.setValue(scroll_position)
 
+from PyQt6.QtCore import QObject as _QObject
+
+class _ViewportWheelFilter(_QObject):
+    """
+    安装在 scroll_area.viewport() 上的事件过滤器。
+    
+    拦截 Ctrl+Wheel，路由给连续视图类型的 _handle_zoom_wheel；
+    其余事件一律透传，保留 QScrollArea 原始行为。
+    """
+
+    def __init__(self, viewtype):
+        super().__init__()
+        self._viewtype = viewtype
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent, Qt as _Qt
+        if event.type() == QEvent.Type.Wheel:
+            if event.modifiers() == _Qt.KeyboardModifier.ControlModifier:
+                try:
+                    self._viewtype._handle_zoom_wheel(event)
+                except Exception as exc:
+                    logging.warning(f"_ViewportWheelFilter: _handle_zoom_wheel 失败: {exc}")
+                return True  # 拦截，不再向下传递
+        return super().eventFilter(obj, event)
+
+
 class BaseContinuousViewtype(BrowsingViewtype, ABC):
     """连续浏览视图类型基础基类"""
     
@@ -633,7 +660,35 @@ class BaseContinuousViewtype(BrowsingViewtype, ABC):
         super().__init__(viewtype_service, pdf_viewer)
         self.page_labels = {}  # 存储页面标签
         self.pages_layout = None
+        self._viewport_wheel_filter = None  # Ctrl+滚轮缩放的 viewport 事件过滤器
     
+    def _install_viewport_wheel_filter(self):
+        """在 scroll_area.viewport() 上安装 Ctrl+滚轮事件过滤器"""
+        if self.scroll_area is None:
+            return
+        viewport = self.scroll_area.viewport()
+        if viewport is None:
+            return
+        # 若已安装则先移除旧的
+        self._remove_viewport_wheel_filter()
+        self._viewport_wheel_filter = _ViewportWheelFilter(self)
+        viewport.installEventFilter(self._viewport_wheel_filter)
+        logging.debug(f"{self.__class__.__name__}：已安装 viewport Ctrl+滚轮过滤器")
+
+    def _remove_viewport_wheel_filter(self):
+        """移除 viewport 事件过滤器"""
+        if self._viewport_wheel_filter is None:
+            return
+        if self.scroll_area is not None:
+            viewport = self.scroll_area.viewport()
+            if viewport is not None:
+                try:
+                    viewport.removeEventFilter(self._viewport_wheel_filter)
+                except RuntimeError:
+                    pass
+        self._viewport_wheel_filter = None
+        logging.debug(f"{self.__class__.__name__}：已移除 viewport Ctrl+滚轮过滤器")
+
     def activate(self):
         """激活连续浏览模式"""
         # 调用钩子方法
@@ -700,12 +755,22 @@ class BaseContinuousViewtype(BrowsingViewtype, ABC):
         # 设置模式为激活状态 - 移到最后，确保所有资源都已成功创建
         self.is_active = True
         
+        # 安装 viewport Ctrl+滚轮过滤器，确保鼠标在页面间隙时也能缩放
+        self._install_viewport_wheel_filter()
+        
         # 显示当前页面
         self.show_page(self.pdf_viewer.current_page)
         
         # 调用钩子方法
         self._after_activate()
     
+    def deactivate(self):
+        """停用连续浏览模式"""
+        # 移除 viewport Ctrl+滚轮过滤器
+        self._remove_viewport_wheel_filter()
+        # 调用父类 deactivate（取消缩放观察者、is_active=False、reset_display）
+        super().deactivate()
+
     def reset_display(self):
         """重置显示状态"""
         # 检查模式是否激活，非激活状态不清理布局
@@ -740,7 +805,7 @@ class BaseContinuousViewtype(BrowsingViewtype, ABC):
         """处理状态变化"""
         # 调用基类的on_state_changed方法处理通用逻辑
         super().on_state_changed(state_name, old_value, new_value)
-        
+
         try:
             # 只处理缩放级别变化时的页面更新
             if state_name == "zoom_level":
@@ -750,6 +815,16 @@ class BaseContinuousViewtype(BrowsingViewtype, ABC):
                         pixmap = self.pdf_viewer._get_page_pixmap(page_num)
                         if pixmap is not None:
                             page_label.setPixmap(pixmap)
+                        else:
+                            # 保底：pixmap 为 None 时用 get_page_size 预测新尺寸，
+                            # 防止缩小时旧的 minimumSize 残留导致 widget 无法收缩
+                            try:
+                                predicted = self.viewtype_service.get_page_size(
+                                    page_num, new_value)
+                                if predicted and predicted[0] > 0 and predicted[1] > 0:
+                                    page_label.setMinimumSize(predicted[0], predicted[1])
+                            except Exception:
+                                pass
         except Exception as e:
             self._handle_exception(f"处理状态变化失败: {str(e)}")
             # 尝试回滚到之前的状态
@@ -780,6 +855,7 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
     
     def __init__(self, viewtype_service, pdf_viewer):
         super().__init__(viewtype_service, pdf_viewer)
+        self._programmatic_scroll = False  # 标记程序主动滚动，阻断 valueChanged 触发的页面计算
         
     def activate(self):
         """激活连续视图类型"""
@@ -854,6 +930,9 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         self.is_active = True
         logging.debug(f"{self.__class__.__name__}：is_active设置为True")
         
+        # 安装 viewport Ctrl+滚轮过滤器
+        self._install_viewport_wheel_filter()
+        
         # 显示当前页面
         self.show_page(self.pdf_viewer.current_page)
         logging.debug(f"{self.__class__.__name__}：激活成功，已显示当前页面")
@@ -883,9 +962,14 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         """显示指定页码的页面"""
         if not self.is_active:
             return
-            
+
+        logging.debug(f"[show_page] page_num={page_num}, current_page_before={self.current_page}")
         if page_num < 0 or page_num >= self.viewtype_service.get_total_pages():
             return
+        
+        # 设置程序滚动锁，防止 _scroll_to_unit 触发的 valueChanged
+        # 被 ThumbnailSync 错误地解释为用户翻页
+        self._programmatic_scroll = True
             
         self.current_page = page_num
         
@@ -906,8 +990,13 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         if self.pages_layout is not None:
             self._cleanup_unneeded_widgets(needed_unit_nums)
         
-        # 显示需要的单元
+        # 显示需要的单元（按升序创建新 widget，追加到布局）
         self._display_needed_units(needed_unit_nums)
+        
+        # 全局重排：确保 pages_layout 中所有 widget 按页码升序排列
+        # 这一步处理「向前翻页时新建 widget 追加到末尾导致乱序」的情况
+        if self.pages_layout is not None:
+            self._reorder_layout_widgets()
         
         # 滚动到当前单元（仅在页面标签存在时）
         # 注意：_display_needed_units 中的异步渲染可能尚未完成
@@ -916,6 +1005,10 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         
         # 强制布局更新
         self.update_config()
+        
+        # 延迟释放程序滚动锁，让布局事件和 QTimer.singleShot(0) 排队的操作完成
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(300, self._release_programmatic_scroll)
     
     def _calculate_display_range(self, current_unit):
         """计算需要显示的单元范围"""
@@ -930,13 +1023,18 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         current_widgets = []
         widget_to_unit = {}
         
-        # 先构建widget到unit的映射
+        # 先构建widget到unit的映射（unit_num 统一使用整数）
         if hasattr(self, 'page_labels'):
             for unit, widget in list(self.page_labels.items()):
-                widget_to_unit[widget] = unit
+                widget_to_unit[widget] = unit  # page_labels key 是整数
         if hasattr(self, 'spread_labels'):
-            for unit, widget in list(self.spread_labels.items()):
-                widget_to_unit[widget] = unit
+            for spread_key, widget in list(self.spread_labels.items()):
+                # spread_labels key 是字符串 "spread_N"，提取整数 N
+                try:
+                    unit_num = int(spread_key.split('_')[1])
+                except (ValueError, IndexError):
+                    unit_num = -1
+                widget_to_unit[widget] = unit_num
         
         # 收集所有widget
         if self.pages_layout is not None:
@@ -946,7 +1044,9 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
                     current_widgets.append(item.widget())
         
         # 重新添加需要的widget，删除不需要的widget
-        for widget in current_widgets:
+        # 按页码升序排列，确保布局中 widget 顺序与实际页码一致
+        # 避免异步渲染完成时间不同导致的布局乱序 → 滚动位置偏移 → 跳页问题
+        for widget in sorted(current_widgets, key=lambda w: widget_to_unit.get(w, -1)):
             unit_num = widget_to_unit.get(widget, -1)
             if unit_num in needed_unit_nums:
                 # 保留需要的widget，重新添加到布局
@@ -974,8 +1074,11 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
                 # 从字典中移除（在调用deleteLater之前）
                 if hasattr(self, 'page_labels') and unit_num in self.page_labels:
                     del self.page_labels[unit_num]
-                if hasattr(self, 'spread_labels') and unit_num in self.spread_labels:
-                    del self.spread_labels[unit_num]
+                if hasattr(self, 'spread_labels'):
+                    # spread_labels 用字符串 key，需要转回
+                    spread_key = f"spread_{unit_num}"
+                    if spread_key in self.spread_labels:
+                        del self.spread_labels[spread_key]
                 
                 # 最后调用deleteLater
                 try:
@@ -984,11 +1087,72 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
                     # 忽略已删除或无效的widget
                     pass
     
+    def _reorder_layout_widgets(self):
+        """重排 pages_layout 中所有 widget，确保按单元编号升序排列
+
+        _cleanup_unneeded_widgets 保证了「已有 widget」的顺序正确，
+        但 _display_needed_units 新建的 widget 总是追加到末尾。
+        向前翻页时，新建的小页码 widget 会排在已有大页码 widget 之后。
+        本方法通过「取出所有 → 按序重新添加」来修正这个问题。
+        """
+        if self.pages_layout is None:
+            return
+
+        # 构建 widget → unit_num 的映射
+        widget_to_unit = {}
+        if hasattr(self, 'page_labels'):
+            for unit, widget in self.page_labels.items():
+                widget_to_unit[widget] = unit
+        if hasattr(self, 'spread_labels'):
+            for unit_key, widget in self.spread_labels.items():
+                # spread_labels 的 key 是字符串如 "spread_0"
+                try:
+                    unit_num = int(unit_key.split('_')[1])
+                except (ValueError, IndexError):
+                    unit_num = -1
+                widget_to_unit[widget] = unit_num
+
+        # 取出布局中的所有 widget
+        all_widgets = []
+        while self.pages_layout.count() > 0:
+            item = self.pages_layout.takeAt(0)
+            if item.widget() is not None:
+                all_widgets.append(item.widget())
+
+        logging.warning(f"[_reorder_layout_widgets] before reorder: page_labels={list(self.page_labels.keys()) if hasattr(self, 'page_labels') else []}, widget order by page_labels={[(widget_to_unit.get(w, -1), id(w)) for w in all_widgets]}")
+
+        # 按 unit_num 升序重新添加
+        sorted_widgets = sorted(all_widgets, key=lambda w: widget_to_unit.get(w, -1))
+        for widget in sorted_widgets:
+            self.pages_layout.addWidget(widget)
+
+        logging.warning(f"[_reorder_layout_widgets] after reorder: layout_count={self.pages_layout.count()}, order by unit={[widget_to_unit.get(self.pages_layout.itemAt(i).widget(), -1) for i in range(self.pages_layout.count())]}")
+    
+    def _release_programmatic_scroll(self):
+        """释放程序滚动锁"""
+        self._programmatic_scroll = False
+    
     def _display_needed_units(self, needed_unit_nums):
-        """显示需要的单元"""
-        for unit_num in needed_unit_nums:
-            # 只在需要时创建新的页面标签
-            if not hasattr(self, 'page_labels') or unit_num not in self.page_labels:
+        """显示需要的单元
+        
+        按单元编号升序遍历，确保新建 widget 以正确的页码顺序追加到 pages_layout，
+        避免乱序追加导致滚动位置计算错误（翻页回跳问题的根因之一）。
+        
+        注意：_show_single_unit 内部有去重保护，重复调用不会重建已存在的 widget。
+        """
+        # 判断是双页连续模式还是单页连续模式
+        # TwoPageContinuousViewtype 独有 spread_labels，单页连续模式无此属性
+        use_spread = hasattr(self, 'spread_labels')
+        
+        for unit_num in sorted(needed_unit_nums):
+            # 检查单元是否已存在，避免重复创建
+            if use_spread:
+                spread_key = f"spread_{unit_num}"
+                already_exists = spread_key in self.spread_labels
+            else:
+                already_exists = unit_num in self.page_labels
+            
+            if not already_exists:
                 self._show_single_unit(unit_num)
     
     @abstractmethod
@@ -1024,16 +1188,8 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         
         # 确保scroll_area的widget正确调整大小
         if self.scroll_area is not None and self.scroll_area.widget() is not None:
-            # 强制调整大小，不限制频率，确保布局及时更新
-            self.scroll_area.widget().adjustSize()
             self.scroll_area.widget().updateGeometry()
             
             # 强制scroll_area更新
             self.scroll_area.update()
-        
-        # 强制处理所有待处理事件，确保UI立即更新
-        from PyQt6.QtWidgets import QApplication
-        if QApplication.instance():
-            QApplication.processEvents()
-            QApplication.processEvents()  # 第二次调用确保布局完全更新
         
