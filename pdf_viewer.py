@@ -19,15 +19,13 @@ PDF浏览器主程序入口
 """
 
 import sys
-import os
 import logging
 
 from PyQt6.QtWidgets import QApplication
 
 # 配置日志
-_log_level = os.environ.get('PDF_LOG_LEVEL', 'ERROR').upper()
 logging.basicConfig(
-    level=getattr(logging, _log_level, logging.ERROR),
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.FileHandler('pdf_viewer.log'), logging.StreamHandler()]
 )

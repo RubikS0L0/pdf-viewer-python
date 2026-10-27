@@ -52,7 +52,6 @@ class ViewtypeManager:
         
     def _clear_center_layout(self):
         """清理中心布局的所有内容，确保不会残留上一视图类型的显示元素"""
-        # 增强空值检查，确保所有依赖属性存在
         if not hasattr(self.pdf_viewer, 'scroll_area') or not self.pdf_viewer.scroll_area:
             return
         
@@ -65,26 +64,25 @@ class ViewtypeManager:
         if not center_layout:
             return
             
-        # 移除所有子部件
-        while center_layout.count() > 0:
-            item = center_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                # 递归清理子布局
-                sub_layout = item.layout()
-                if sub_layout:
-                    # 定义递归清理函数
-                    def cleanup_layout(layout):
-                        while layout.count() > 0:
-                            sub_item = layout.takeAt(0)
-                            if sub_item.widget():
-                                sub_item.widget().deleteLater()
-                            elif sub_item.layout() and sub_item.layout() != layout:  # 防止递归自身
-                                cleanup_layout(sub_item.layout())
-                    # 调用递归清理函数
-                    cleanup_layout(sub_layout)
-                    del sub_layout
+        # 递归清理布局内的所有子部件（widget 和嵌套 layout）
+        def cleanup_layout(layout):
+            while layout.count() > 0:
+                item = layout.takeAt(0)
+                if item.widget():
+                    widget = item.widget()
+                    try:
+                        widget.pixmapChanged.disconnect()
+                    except (RuntimeError, TypeError, Exception):
+                        pass
+                    try:
+                        widget.deleteLater()
+                    except Exception:
+                        pass
+                elif item.layout():
+                    # 递归清理嵌套的子 layout
+                    cleanup_layout(item.layout())
+        
+        cleanup_layout(center_layout)
         
         # 强制更新布局
         center_layout.invalidate()

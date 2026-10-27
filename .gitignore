@@ -32,6 +32,9 @@ Thumbs.db
 # Backup
 backup/
 
+# Private/workspace dirs
+-p/
+
 # Model files (large binary files)
 models/best.onnx
 
@@ -43,6 +46,9 @@ PDF for test/
 
 # WorkBuddy memory (local workspace)
 .workbuddy/
+
+# Mavis AI tool workspace
+.mavis/
 
 # Test outputs and diagnostics
 tests/*_output*.txt
