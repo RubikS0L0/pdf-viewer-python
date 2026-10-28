@@ -4,13 +4,14 @@
 """
 PDF处理器类
 
-负责PDF解析和渲染的核心逻辑，使用多进程处理CPU密集型任务
+负责PDF解析和渲染的核心逻辑。
+渲染为同步执行（不使用 multiprocessing），由上层统一线程池调度；
+跨进程缓存对象改为普通线程安全结构，避免额外管理进程开销。
 """
 
 import fitz  # PyMuPDF
 import logging
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
+import threading
 from typing import Optional, Tuple, Dict, Any
 import tempfile
 import os
@@ -24,45 +25,31 @@ class PDFProcessor:
         self.logger = logging.getLogger(__name__)
         
         # 获取CPU核心数
-        self.cpu_count = multiprocessing.cpu_count()
+        self.cpu_count = os.cpu_count() or 1
         
-        # 创建线程池（IO密集型任务）
-        self.thread_pool = ThreadPoolExecutor(max_workers=8)
+        # 渲染为同步执行（单进程），使用普通线程安全结构即可
+        self.cache = {}
         
-        # 创建跨进程管理器
-        self.manager = multiprocessing.Manager()
-        
-        # 创建跨进程缓存
-        self.cache = self.manager.dict()
-        
-        # 创建缓存锁
-        self.cache_lock = self.manager.Lock()
+        # 缓存锁
+        self.cache_lock = threading.Lock()
         
         # 缓存上限
         self.MAX_CACHE_SIZE = 50
         
         # 缓存访问时间记录
-        self.cache_access = self.manager.dict()
+        self.cache_access = {}
         
         # 临时文件目录
         self.temp_dir = tempfile.gettempdir()
         
         # 缓存文件映射
-        self.cache_files = self.manager.dict()
+        self.cache_files = {}
     
     def shutdown(self):
         """关闭处理器，清理资源"""
         try:
-            # 关闭线程池
-            if hasattr(self, 'thread_pool'):
-                self.thread_pool.shutdown(wait=False)
-            
             # 清理缓存文件
             self._cleanup_cache_files()
-            
-            # 关闭管理器
-            if hasattr(self, 'manager'):
-                self.manager.shutdown()
         except Exception as e:
             self.logger.error(f"关闭处理器失败: {str(e)}")
     
@@ -150,7 +137,7 @@ class PDFProcessor:
             with self.cache_lock:
                 if cache_key in self.cache:
                     # 更新访问时间
-                    self.cache_access[cache_key] = multiprocessing.current_process().pid
+                    self.cache_access[cache_key] = os.getpid()
                     return self.cache[cache_key]
             
             # 直接执行渲染，不使用进程池，避免Pool对象传递问题
@@ -162,7 +149,7 @@ class PDFProcessor:
                 # 更新缓存
                 with self.cache_lock:
                     self.cache[cache_key] = (temp_path, (width, height))
-                    self.cache_access[cache_key] = multiprocessing.current_process().pid
+                    self.cache_access[cache_key] = os.getpid()
                     self.cache_files[cache_key] = temp_path
                     
                     # 清理旧缓存
@@ -176,11 +163,9 @@ class PDFProcessor:
             return None
     
     def get_pdf_metadata(self, pdf_path: str) -> Optional[Dict[str, Any]]:
-        """获取PDF元数据（IO密集型任务）"""
+        """获取PDF元数据（同步执行，由上层统一线程池调度）"""
         try:
-            # 提交到线程池
-            future = self.thread_pool.submit(self._get_pdf_metadata_worker, pdf_path)
-            return future.result(timeout=10.0)
+            return self._get_pdf_metadata_worker(pdf_path)
         except Exception as e:
             self.logger.error(f"获取PDF元数据失败: {str(e)}")
             return None
@@ -204,11 +189,9 @@ class PDFProcessor:
             return None
     
     def get_page_size(self, pdf_path: str, page_num: int, dpi: int = 96) -> Optional[Tuple[int, int]]:
-        """获取页面尺寸"""
+        """获取页面尺寸（同步执行，由上层统一线程池调度）"""
         try:
-            # 提交到线程池
-            future = self.thread_pool.submit(self._get_page_size_worker, pdf_path, page_num, dpi)
-            return future.result(timeout=5.0)
+            return self._get_page_size_worker(pdf_path, page_num, dpi)
         except Exception as e:
             self.logger.error(f"获取页面尺寸失败: {str(e)}")
             return None

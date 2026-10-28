@@ -23,6 +23,9 @@ build/
 # Environment
 .env
 
+# Virtual environment
+.venv/
+
 # Windows
 Thumbs.db
 

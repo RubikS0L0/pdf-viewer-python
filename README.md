@@ -129,7 +129,6 @@ PDF浏览器采用MVC（Model-View-Controller）架构设计，结合依赖注�
 ├── models/          # 模型文件
 ├── services/        # 服务层
 │   ├── event_bus.py         # 事件总线
-│   ├── page_render_service.py  # 页面渲染服务
 │   ├── pdf_service.py       # PDF服务
 │   └── zoom_service.py      # 缩放服务
 ├── ui/              # UI组件
@@ -144,9 +143,7 @@ PDF浏览器采用MVC（Model-View-Controller）架构设计，结合依赖注�
 ├── utils/           # 工具函数
 │   ├── config_loader.py     # 配置加载
 │   ├── constants.py         # 常量定义
-│   ├── dependency_injector.py  # 依赖注入
-│   ├── di_container.py      # 依赖注入容器
-│   └── performance_monitor.py  # 性能监控
+│   └── di_container.py      # 依赖注入容器
 ├── viewtypes/       # 浏览视图类型
 │   ├── base.py              # 基础视图类型
 │   ├── manager.py           # 视图类型管理器
@@ -173,7 +170,7 @@ PDFMainWindow (主窗口)
 │   └── TwoPageContinuousViewtype (双页连续视图类型)
 ├── PDFService (PDF服务)
 │   ├── PDFManager (文档管理)
-│   ├── PageRenderer (页面渲染)
+│   ├── PDFProcessor (PDF渲染处理器)
 │   └── PageCache (页面缓存)
 └── ZoomService (缩放服务)
 ```

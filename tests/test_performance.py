@@ -236,7 +236,7 @@ def test_pdf_service_layer(pdf_path: str):
     pdf_manager = PDFManager()
     page_renderer = PageRenderer()
     page_cache = PageCache()
-    pdf_service = PDFService(pdf_manager, page_renderer, page_cache)
+    pdf_service = PDFService(pdf_manager, page_cache)
 
     try:
         # 2.1 文档打开

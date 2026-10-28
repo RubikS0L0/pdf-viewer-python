@@ -10,11 +10,10 @@ PDF服务类
 import os
 import logging
 from typing import Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6.QtGui import QPixmap
 
-from business.interfaces import IPDFManager, IPageRenderer, IPageCache
+from business.interfaces import IPDFManager, IPageCache
 from business.pdf_processor import PDFProcessor
 
 # 导入异常处理模块
@@ -30,30 +29,29 @@ class PDFService:
     # 共享线程池最大工作线程数
     _ASYNC_MAX_WORKERS = 2
 
-    def __init__(self, pdf_manager: IPDFManager, page_renderer: IPageRenderer, page_cache: IPageCache):
+    def __init__(self, pdf_manager: IPDFManager, page_cache: IPageCache, pdf_processor=None):
         """初始化PDF服务
         
         参数：
         - pdf_manager: IPDFManager, PDF管理器实例
-        - page_renderer: IPageRenderer, 页面渲染器实例
         - page_cache: IPageCache, 页面缓存实例
+        - pdf_processor: 可选，PDF处理器实例；默认自动创建，便于测试隔离
         """
         self.pdf_manager = pdf_manager
-        self.page_renderer = page_renderer
         self.page_cache = page_cache
         self.logger = logging.getLogger(__name__)
         
-        # 初始化PDF处理器
-        self.pdf_processor = PDFProcessor()
+        # 初始化PDF处理器（支持注入，便于测试隔离）
+        self.pdf_processor = pdf_processor or PDFProcessor()
 
-        # 共享线程池：整个 PDFService 生命周期内复用，避免每次调用都创建新线程池
-        # 使用 max_workers=2 既保留并发能力，又不过度占用系统资源
-        self._executor = ThreadPoolExecutor(max_workers=self._ASYNC_MAX_WORKERS)
+        # 复用全局线程池（由 ThreadPoolManager 统一管理），不再自建
+        from services.thread_pool_manager import thread_pool_manager
+        self._render_executor = thread_pool_manager.get_render_executor()
+        self._preload_executor = thread_pool_manager.get_preload_executor()
 
     def shutdown(self):
-        """释放资源，关闭线程池。应在应用退出或不再需要该服务时调用。"""
-        self._executor.shutdown(wait=False)
-        self.logger.info("PDFService 线程池已关闭")
+        """释放资源。线程池由全局 ThreadPoolManager 统一管理，此处不做关闭。"""
+        self.logger.info("PDFService 已关闭")
     
     @staticmethod
     def _validate_pdf_file(file_path: str) -> tuple[bool, str]:
@@ -330,8 +328,8 @@ class PDFService:
                     handle_exception(e, self.logger, {"action": "async_render", "page_num": page_num, "file": pdf_path})
                     event_bus.publish_render_completed(page_num, None, True)
             
-            # 复用共享线程池，避免每次调用都创建新线程池导致资源泄漏
-            future = self._executor.submit(async_render)
+            # 复用全局渲染线程池（ThreadPoolManager 统一管理）
+            future = self._render_executor.submit(async_render)
             return id(future)
         except Exception as e:
             handle_exception(e, self.logger, {"action": "render_page_async", "page_num": page_num, "zoom": zoom_level})
@@ -444,9 +442,9 @@ class PDFService:
                 except Exception as e:
                     handle_exception(e, self.logger, {"action": "preload_render", "page_num": page_num})
             
-            # 异步提交预加载任务，不阻塞主线程
+            # 异步提交预加载任务到全局预加载线程池，不阻塞主线程
             for page_num in unique_pages:
-                self._executor.submit(_preload_one, page_num)
+                self._preload_executor.submit(_preload_one, page_num)
                 submitted += 1
             
             return submitted

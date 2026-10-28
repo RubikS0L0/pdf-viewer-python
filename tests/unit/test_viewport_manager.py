@@ -19,14 +19,14 @@ class TestViewportManager:
     @classmethod
     def setup_class(cls):
         """设置测试类环境"""
-        # 创建QApplication实例
-        cls.app = QApplication([])
+        # 复用会话级 QApplication（conftest 提供），不重复创建
+        cls.app = QApplication.instance() or QApplication([])
     
     @classmethod
     def teardown_class(cls):
         """清理测试类环境"""
-        # 清理QApplication实例
-        cls.app.quit()
+        # 会话级 QApplication 由 conftest 统一管理，这里不再退出
+        pass
     
     def setup_method(self):
         """设置测试环境"""
@@ -152,7 +152,7 @@ class TestViewportManager:
         
         # 创建一个测试事件
         from PyQt6.QtCore import QEvent
-        resize_event = QEvent(QEvent.Resize)
+        resize_event = QEvent(QEvent.Type.Resize)
         
         # 调用事件过滤器
         result = self.viewport_manager.eventFilter(self.scroll_area, resize_event)

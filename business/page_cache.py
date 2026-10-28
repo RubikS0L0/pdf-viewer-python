@@ -77,13 +77,16 @@ class PageCache(IPageCache):
         self.access_frequency = defaultdict(int)
         self.page_sizes = {}
 
-    def __init__(self, max_size=None, use_config=False):
+    def __init__(self, max_size=None, use_config=False, renderer=None):
         """初始化页面缓存
         
         参数：
         - max_size: int, 缓存最大大小，默认为配置文件中的page_cache_size
         - use_config: bool, 是否使用配置文件，默认为False（测试环境使用）
+        - renderer: 可选，页面渲染器（IPageRenderer）；供 preload_pages 复用，避免每次新建
         """
+        # 预加载渲染器（可注入复用，避免 preload_pages 每次 new）
+        self._renderer = renderer
         try:
             self._init_common_attributes()
 
@@ -757,13 +760,16 @@ class PageCache(IPageCache):
         返回：
         - int: 预加载成功的页面数量
         """
-        from business.page_renderer import PageRenderer
+        # 复用注入的渲染器；未注入时懒加载一次共享实例，避免每次调用都 new PageRenderer（泄漏线程池）
+        if self._renderer is None:
+            from business.page_renderer import PageRenderer
+            self._renderer = PageRenderer()
+        renderer = self._renderer
         
         try:
             # 格式化缩放级别，确保一致性
             formatted_zoom = round(zoom_level * 100) / 100
             
-            renderer = PageRenderer()
             preloaded = 0
             
             # 预加载当前页

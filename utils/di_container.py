@@ -14,7 +14,6 @@ from business.pdf_manager import PDFManager
 from business.page_renderer import PageRenderer
 from business.page_cache import PageCache
 from services.zoom_service import ZoomService
-from services.page_render_service import PageRenderService
 from services.pdf_service import PDFService
 from services.viewtype_service import ViewtypeService
 
@@ -28,23 +27,15 @@ class Container(containers.DeclarativeContainer):
     # 核心业务逻辑类
     pdf_manager = providers.Singleton(PDFManager)
     page_renderer = providers.Singleton(PageRenderer)
-    page_cache = providers.Singleton(PageCache)
+    page_cache = providers.Singleton(PageCache, renderer=page_renderer)
     
     # 服务类
     zoom_service = providers.Singleton(ZoomService)
-    
-    # 页面渲染服务
-    page_render_service = providers.Singleton(
-        PageRenderService,
-        page_renderer=page_renderer,
-        page_cache=page_cache
-    )
     
     # PDF服务
     pdf_service = providers.Singleton(
         PDFService,
         pdf_manager=pdf_manager,
-        page_renderer=page_renderer,
         page_cache=page_cache
     )
     

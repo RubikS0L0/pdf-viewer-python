@@ -11,9 +11,8 @@ import fitz  # PyMuPDF
 import logging
 import time
 import threading
-import multiprocessing
+import os
 from queue import PriorityQueue, Empty
-from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6.QtCore import QMutex, QTimer
 from PyQt6.QtWidgets import QApplication
@@ -62,12 +61,11 @@ class PageRenderer:
         self.logger = logging.getLogger(__name__)
         self._render_queue = PriorityQueue()
         
-        # 动态计算线程池大小，基于系统CPU核心数
-        cpu_count = multiprocessing.cpu_count()
-        optimal_workers = min(cpu_count, max_workers)
-        self._executor = ThreadPoolExecutor(max_workers=optimal_workers)
+        # 复用全局渲染线程池（ThreadPoolManager 统一管理），不再自建
+        from services.thread_pool_manager import thread_pool_manager
+        self._executor = thread_pool_manager.get_render_executor()
         self._max_workers = max_workers
-        self._system_cpu_count = cpu_count
+        self._system_cpu_count = os.cpu_count() or 1
         
         self._running = True
         self._processing = set()
@@ -79,12 +77,10 @@ class PageRenderer:
         self._render_thread.start()
     
     def shutdown(self):
-        """关闭渲染器"""
+        """关闭渲染器。线程池由全局 ThreadPoolManager 统一管理，此处只停止队列线程，不关闭共享池。"""
         self._running = False
         if hasattr(self, '_render_thread'):
             self._render_thread.join(timeout=2.0)
-        if hasattr(self, '_executor'):
-            self._executor.shutdown(wait=False)
     
     @handle_specific_exceptions
     def _render_page_common(self, doc, page_num, zoom_level=1.0, doc_mutex=None):
@@ -124,10 +120,6 @@ class PageRenderer:
         except fitz.FileDataError as e:
             error_info = handle_exception(e, self.logger, {"action": "render_page", "page_num": page_num, "zoom": zoom_level})
             self.logger.error(f"PDF文件数据错误：{error_info.message}")
-            return None
-        except fitz.PageError as e:
-            error_info = handle_exception(e, self.logger, {"action": "render_page", "page_num": page_num, "zoom": zoom_level})
-            self.logger.error(f"页面加载错误：{error_info.message}")
             return None
         except Exception as e:
             error_info = handle_exception(e, self.logger, {"action": "render_page", "page_num": page_num, "zoom": zoom_level})

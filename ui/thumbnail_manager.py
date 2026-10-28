@@ -95,9 +95,6 @@ class ThumbnailGenerator(QThread):
         - parent: QObject, 父对象
         - max_workers: int, 最大工作线程数
         """
-        from concurrent.futures import ThreadPoolExecutor
-        import multiprocessing
-        
         super().__init__(parent)
         self.doc = doc
         self.doc_mutex = doc_mutex  # 文档访问锁
@@ -402,9 +399,8 @@ class ThumbnailGenerator(QThread):
                 if not future.done():
                     future.cancel()
             
-            # 关闭线程池
-            if hasattr(self, '_executor'):
-                self._executor.shutdown(wait=True)
+            # 线程池由全局 ThreadPoolManager 统一管理，此处不关闭共享池
+            # （避免组件销毁时误关全局 thumbnail 池，统一在应用退出时由 thread_pool_manager.shutdown 关闭）
             
             # 等待线程完全停止
             if self.isRunning():

@@ -10,11 +10,9 @@
 from .pdf_service import PDFService
 from .event_bus import event_bus
 from .zoom_service import ZoomService
-from .page_render_service import PageRenderService
 
 __all__ = [
     "PDFService",
     "event_bus",
-    "ZoomService",
-    "PageRenderService"
+    "ZoomService"
 ]

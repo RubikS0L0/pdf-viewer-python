@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 # 导入必要的模块
 from business.page_cache import PageCache
+from PyQt6.QtGui import QPixmap
 
 
 class TestPageCacheMinimal:
@@ -34,7 +35,7 @@ class TestPageCacheMinimal:
     def test_add_page_and_get_page(self):
         """测试添加页面和获取页面"""
         # 使用简单对象代替QPixmap
-        test_object = "test_page"
+        test_object = QPixmap(100, 100)
         
         # 添加页面到缓存
         success = self.page_cache.add_page(0, 1.0, test_object)
@@ -48,7 +49,7 @@ class TestPageCacheMinimal:
     def test_add_page_exceeds_max_size(self):
         """测试添加页面超过最大大小"""
         # 使用简单对象代替QPixmap
-        test_object = "test_page"
+        test_object = QPixmap(100, 100)
         
         # 添加4个页面到缓存（最大大小为3）
         for i in range(4):
@@ -66,7 +67,7 @@ class TestPageCacheMinimal:
     def test_remove_page(self):
         """测试移除页面"""
         # 使用简单对象代替QPixmap
-        test_object = "test_page"
+        test_object = QPixmap(100, 100)
         
         # 添加页面到缓存
         self.page_cache.add_page(0, 1.0, test_object)
@@ -89,7 +90,7 @@ class TestPageCacheMinimal:
     def test_clear(self):
         """测试清空缓存"""
         # 使用简单对象代替QPixmap
-        test_object = "test_page"
+        test_object = QPixmap(100, 100)
         
         # 添加页面到缓存
         for i in range(3):
@@ -104,7 +105,7 @@ class TestPageCacheMinimal:
     def test_contains(self):
         """测试缓存包含"""
         # 使用简单对象代替QPixmap
-        test_object = "test_page"
+        test_object = QPixmap(100, 100)
         
         # 添加页面到缓存
         self.page_cache.add_page(0, 1.0, test_object)
