@@ -45,7 +45,7 @@ class RenderCompletedTest:
         # 订阅视口尺寸变化事件
         viewport_manager.viewport_size_changed.connect(self._on_viewport_size_changed)
     
-    def _on_render_completed(self, page_num, result, is_final):
+    def _on_render_completed(self, page_num, zoom_level, result, is_final):
         """处理渲染完成事件"""
         self.render_end_time = time.time()
         render_time = self.render_end_time - self.render_start_time
@@ -256,7 +256,7 @@ class RenderCompletedTest:
         # 模拟渲染完成事件
         def test_event_publish():
             logger.info("模拟发布渲染完成事件")
-            event_bus.publish_render_completed(0, None, True)
+            event_bus.publish_render_completed(0, 1.0, None, True)
         
         # 延迟测试，确保UI初始化完成
         QTimer.singleShot(1000, test_event_publish)

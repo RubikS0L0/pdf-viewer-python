@@ -291,7 +291,7 @@ class PDFService:
         try:
             if not self.pdf_manager.is_open:
                 self.logger.error("异步渲染页面失败：无文档打开")
-                event_bus.publish_render_completed(page_num, None, True)
+                event_bus.publish_render_completed(page_num, zoom_level, None, True)
                 return -1
             
             actual_zoom = zoom_level
@@ -300,7 +300,7 @@ class PDFService:
             try:
                 cached_pixmap = self.page_cache.get_page(page_num, actual_zoom)
                 if cached_pixmap:
-                    event_bus.publish_render_completed(page_num, cached_pixmap, True)
+                    event_bus.publish_render_completed(page_num, actual_zoom, cached_pixmap, True)
                     return 0
             except Exception as e:
                 handle_exception(e, self.logger, {"action": "get_cached_page", "page_num": page_num, "zoom": actual_zoom})
@@ -320,20 +320,20 @@ class PDFService:
                             self.page_cache.add_page(page_num, actual_zoom, pixmap)
                         except Exception as e:
                             handle_exception(e, self.logger, {"action": "add_to_cache", "page_num": page_num})
-                        event_bus.publish_render_completed(page_num, pixmap, True)
+                        event_bus.publish_render_completed(page_num, actual_zoom, pixmap, True)
                     else:
                         self.logger.error(f"异步渲染页面 {page_num} 无结果")
-                        event_bus.publish_render_completed(page_num, None, True)
+                        event_bus.publish_render_completed(page_num, actual_zoom, None, True)
                 except Exception as e:
                     handle_exception(e, self.logger, {"action": "async_render", "page_num": page_num, "file": pdf_path})
-                    event_bus.publish_render_completed(page_num, None, True)
+                    event_bus.publish_render_completed(page_num, actual_zoom, None, True)
             
             # 复用全局渲染线程池（ThreadPoolManager 统一管理）
             future = self._render_executor.submit(async_render)
             return id(future)
         except Exception as e:
             handle_exception(e, self.logger, {"action": "render_page_async", "page_num": page_num, "zoom": zoom_level})
-            event_bus.publish_render_completed(page_num, None, True)
+            event_bus.publish_render_completed(page_num, zoom_level, None, True)
             return -1
     
     @handle_specific_exceptions

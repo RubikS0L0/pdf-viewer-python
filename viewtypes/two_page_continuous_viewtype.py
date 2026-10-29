@@ -155,9 +155,12 @@ class TwoPageContinuousViewtype(ContinuousViewtype):
         return (self.viewtype_service.get_total_pages() + 1) // 2
     
     # ---------- 渲染完成处理 ----------
-    def _on_render_completed(self, page_num, result, is_final):
+    def _on_render_completed(self, page_num, zoom_level, result, is_final):
         """处理渲染完成事件"""
         if result is None or not self.is_active:
+            return
+        # 缩放校验：忽略过期缩放级别的渲染结果
+        if not self._is_current_zoom(zoom_level):
             return
         
         spread_num = page_num // 2

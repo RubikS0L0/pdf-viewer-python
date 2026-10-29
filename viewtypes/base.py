@@ -504,17 +504,83 @@ class BrowsingViewtype(ABC):
             new_zoom = max(Constants.MIN_ZOOM.value, min(new_zoom, Constants.MAX_ZOOM.value))
             
             if abs(new_zoom - self.zoom_level) > 0.01:  # 避免微小变化
+                old_zoom = self.zoom_level  # 记录旧缩放，用于渐进式过渡
                 # 更新ZoomService中的缩放级别
                 self.viewtype_service.set_zoom_level(new_zoom)
                 # 清除该页面在当前缩放级别的缓存
                 if hasattr(self.pdf_viewer, 'page_cache'):
                     self.pdf_viewer.page_cache.remove_page(self.current_page, new_zoom)
-                # 重新显示页面
-                self.viewtype_service.show_page(self.current_page)
+                # 单页模式渐进式过渡（连续模式由 show_page 统一处理，避免重复）
+                if not hasattr(self, 'page_labels'):
+                    self._apply_zoom_progressive_transition(old_zoom, new_zoom)
+                # 缩放防抖：延迟渲染最终缩放级别，避免高频滚轮积压渲染任务
+                self._schedule_zoom_rerender()
                 # 更新缩放控件
                 if hasattr(self.pdf_viewer, 'zoom_controller') and hasattr(self.pdf_viewer.zoom_controller, 'update_zoom_controls'):
                     self.pdf_viewer.zoom_controller.update_zoom_controls()
                 event.accept()
+
+    # ---------- 缩放节流与渐进式渲染 ----------
+    def _schedule_zoom_rerender(self):
+        """缩放防抖：延迟渲染最终缩放级别，避免高频滚轮积压渲染任务。
+
+        快速滚动时只保留最后一次渲染请求，中间缩放级别不再渲染。
+        """
+        from PyQt6.QtCore import QTimer
+        timer = getattr(self, '_zoom_rerender_timer', None)
+        if timer is not None:
+            timer.stop()
+        self._zoom_rerender_timer = QTimer.singleShot(
+            80,
+            lambda: self.viewtype_service.show_page(self.current_page)
+        )
+
+    def _apply_zoom_progressive_transition(self, old_zoom, new_zoom):
+        """缩放时先用当前 pixmap 缩放过渡显示，高清异步渲染完成后替换，减少空白等待。
+
+        支持：
+        - 连续/双页模式：遍历 page_labels/spread_labels，对每个可见 label 缩放过渡
+        - 单页模式：对 current_pixmap 缩放过渡
+        """
+        try:
+            if not old_zoom or old_zoom <= 0:
+                return
+            from PyQt6.QtCore import Qt
+            ratio = new_zoom / old_zoom
+            # 多页模式：对每个可见 label 用其当前 pixmap 缩放过渡
+            for labels_attr in ('page_labels', 'spread_labels'):
+                labels = getattr(self, labels_attr, None)
+                if labels:
+                    for page_label in list(labels.values()):
+                        if page_label is None:
+                            continue
+                        try:
+                            pm = page_label.pixmap() if hasattr(page_label, 'pixmap') else None
+                            if pm is None or pm.isNull():
+                                continue
+                            nw = max(1, int(pm.width() * ratio))
+                            nh = max(1, int(pm.height() * ratio))
+                            scaled = pm.scaled(nw, nh, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                            page_label.setPixmap(scaled)
+                        except Exception:
+                            continue
+                    return
+            # 单页模式
+            if self.current_pixmap is None:
+                return
+            new_w = max(1, int(self.current_pixmap.width() * ratio))
+            new_h = max(1, int(self.current_pixmap.height() * ratio))
+            scaled = self.current_pixmap.scaled(new_w, new_h, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.set_page_pixmap(scaled)
+        except Exception as e:
+            self.logger.error(f"渐进式缩放过渡失败: {str(e)}")
+
+    def _is_current_zoom(self, zoom_level):
+        """判断渲染结果对应的缩放级别是否仍为当前缩放，防止旧缩放结果覆盖显示。"""
+        try:
+            return abs(zoom_level - self.viewtype_service.get_zoom_level()) < 0.01
+        except Exception:
+            return True
     
     def set_page_pixmap(self, pixmap):
         """设置页面图像"""
@@ -806,12 +872,22 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
         needed_unit_nums = set(range(start_unit, end_unit + 1))
         needed_unit_nums.add(current_unit)
         
+        # 检测缩放变化：缩放变化时强制重新渲染所有可见页（含已存在的label）。
+        # 否则 _display_needed_units 会跳过已存在 label 的页，导致缩放后页面不更新。
+        old_zoom = getattr(self, '_last_show_zoom', None)
+        current_zoom = self.viewtype_service.get_zoom_level()
+        zoom_changed = old_zoom is None or abs(current_zoom - old_zoom) > 0.01
+        # 缩放变化时先用当前可见图缩放过渡显示（渐进式），减少高清渲染等待
+        if zoom_changed and old_zoom is not None:
+            self._apply_zoom_progressive_transition(old_zoom, current_zoom)
+        self._last_show_zoom = current_zoom
+        
         # 移除不需要的页面标签
         if self.pages_layout is not None:
             self._cleanup_unneeded_widgets(needed_unit_nums)
         
-        # 显示需要的单元
-        self._display_needed_units(needed_unit_nums)
+        # 显示需要的单元（缩放变化时强制重渲染）
+        self._display_needed_units(needed_unit_nums, force_rerender=zoom_changed)
         
         # 滚动到当前单元
         self._scroll_to_unit(current_unit)
@@ -879,10 +955,14 @@ class ContinuousViewtype(BaseContinuousViewtype, ABC):
                 except Exception:
                     pass
     
-    def _display_needed_units(self, needed_unit_nums):
-        """显示需要的单元"""
+    def _display_needed_units(self, needed_unit_nums, force_rerender=False):
+        """显示需要的单元
+        
+        force_rerender=True 时，对范围内的单元强制重新渲染（缩放变化场景），
+        否则仅渲染尚未创建 label 的单元，避免滚动翻页时的重复渲染。
+        """
         for unit_num in needed_unit_nums:
-            if not hasattr(self, 'page_labels') or unit_num not in self.page_labels:
+            if force_rerender or not hasattr(self, 'page_labels') or unit_num not in self.page_labels:
                 if hasattr(self, 'spread_labels') and f"spread_{unit_num}" in self.spread_labels:
                     continue
                 self._show_single_unit(unit_num)

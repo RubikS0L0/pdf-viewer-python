@@ -76,11 +76,12 @@ class ContentArea:
             self.center_layout.invalidate()
             self.center_layout.activate()
     
-    def _on_render_completed(self, page_num, result, is_final):
+    def _on_render_completed(self, page_num, zoom_level, result, is_final):
         """处理渲染完成事件
         
         参数：
         - page_num: int, 页面编号
+        - zoom_level: float, 渲染时对应的缩放级别
         - result: QPixmap, 渲染结果
         - is_final: bool, 是否为最终结果
         """

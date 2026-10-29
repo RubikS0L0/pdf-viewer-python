@@ -86,9 +86,12 @@ class TwoPageViewtype(BrowsingViewtype):
         v_scroll.setValue(v_pos)
         h_scroll.setValue(h_pos)
     
-    def _on_render_completed(self, page_num, result, is_final):
+    def _on_render_completed(self, page_num, zoom_level, result, is_final):
         """处理渲染完成事件"""
         if result is None or not self.is_active:
+            return
+        # 缩放校验：忽略过期缩放级别的渲染结果
+        if not self._is_current_zoom(zoom_level):
             return
             
         # 确保页面标签已初始化

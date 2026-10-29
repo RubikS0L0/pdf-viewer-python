@@ -91,10 +91,13 @@ class SinglePageViewtype(BrowsingViewtype):
                 return False
         return True
     
-    def _on_render_completed(self, page_num, result, is_final):
+    def _on_render_completed(self, page_num, zoom_level, result, is_final):
         """处理渲染完成事件"""
         # 检查必要的状态
         if result is None or not self.is_active:
+            return
+        # 缩放校验：只处理对应当前缩放级别的渲染结果，防止旧缩放结果覆盖显示
+        if not self._is_current_zoom(zoom_level):
             return
             
         # 确保页面标签已初始化

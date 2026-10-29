@@ -20,8 +20,9 @@ class EventBus(QObject):
     # 缩放事件: (zoom_level: float, zoom_mode: str)
     zoom_changed = pyqtSignal(float, str)
     
-    # 渲染完成事件: (page_num: int, result: object, is_final: bool)
-    render_completed = pyqtSignal(int, object, bool)
+    # 渲染完成事件: (page_num: int, zoom_level: float, result: object, is_final: bool)
+    # zoom_level 用于接收方校验渲染结果是否对应当前缩放，防止旧缩放结果覆盖新显示
+    render_completed = pyqtSignal(int, float, object, bool)
     
     # 页面更新事件: (page_num: int)
     page_updated = pyqtSignal(int)
@@ -98,15 +99,16 @@ class EventBus(QObject):
             self._last_zoom_mode = zoom_mode
             self.zoom_changed.emit(zoom_level, zoom_mode)
     
-    def publish_render_completed(self, page_num: int, result: object, is_final: bool = True) -> None:
+    def publish_render_completed(self, page_num: int, zoom_level: float, result: object, is_final: bool = True) -> None:
         """发布渲染完成事件
         
         参数：
         - page_num: int, 页面编号
+        - zoom_level: float, 渲染时对应的缩放级别（接收方据此校验是否过期）
         - result: object, 渲染结果
         - is_final: bool, 是否为最终结果
         """
-        self.render_completed.emit(page_num, result, is_final)
+        self.render_completed.emit(page_num, zoom_level, result, is_final)
     
     def publish_page_updated(self, page_num: int) -> None:
         """发布页面更新事件
